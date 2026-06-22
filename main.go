@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"teaTui/geo"
 	"teaTui/render"
 	"teaTui/tiles"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/log"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -114,11 +116,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View is called after every Update. It must be fast.
 // We just return the last computed frame string.
 func (m model) View() string {
-	if m.frame == "" {
-		return m.status + "\n"
+	frame := m.frame
+	if frame == "" {
+		frame = strings.Repeat("\n", max(m.height-1, 1))
 	}
-	// Append status line at the bottom
-	return m.frame + "\x1b[0m" + m.status + " (q=quit +/-=zoom arrows=pan)"
+
+	hud := m.hud()
+	if m.status == "Rendering..." {
+		// dim the HUD to indicate stale frame
+		hud = mutedStyle.Foreground(lipgloss.Color("240")).Render(m.hud())
+	}
+
+	return frame + "\n" + hud
 }
 
 // renderCmd returns a Cmd that renders the map in a goroutine.
@@ -170,4 +179,48 @@ func main() {
 	if _, err := p.Run(); err != nil {
 		log.Fatalf("Error: %v", err)
 	}
+}
+
+func (m model) hud() string {
+	zoom := fmt.Sprintf("zoom: %d", m.zoom)
+
+	// Compass
+	compass := "N↑"
+
+	// Coordinates
+	coords := fmt.Sprintf("%.4f°N  %.4f°E", m.lat, m.lon)
+
+	// Scale indicator
+	scale := zoomToScale(m.zoom)
+
+	// Loading indicator
+	loading := ""
+	if m.status == "Rendering..." {
+		loading = " ⠿ rendering..."
+	}
+
+	// Pack them together with separators
+	parts := []string{zoom, compass, coords, scale, loading}
+	line := strings.Join(parts, "  │  ")
+
+	// Style it
+	return mutedStyle.Render(line)
+}
+
+var mutedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+
+func zoomToScale(zoom int) string {
+	// Approximate ground distance per tile at each zoom (at ~28°N latitude)
+	// Scale in km for one tile width at Delhi's latitude
+	scales := map[int]string{
+		5: "~500km", 6: "~250km", 7: "~125km",
+		8: "~60km", 9: "~30km", 10: "~15km",
+		11: "~7km", 12: "~3.5km", 13: "~1.8km",
+		14: "~900m", 15: "~450m", 16: "~225m",
+		17: "~110m",
+	}
+	if s, ok := scales[zoom]; ok {
+		return s
+	}
+	return ""
 }

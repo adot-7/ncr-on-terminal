@@ -64,19 +64,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		// Pan (move the viewport)
-		case "up", "k":
+		case "up", "k", "w":
 			m.lat += geo.PanAmount(m.zoom)
 			m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
 			return m, m.renderCmd()
-		case "down", "j":
+		case "down", "j", "s":
 			m.lat -= geo.PanAmount(m.zoom)
 			m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
 			return m, m.renderCmd()
-		case "left", "h":
+		case "left", "h", "a":
 			m.lon -= geo.PanAmount(m.zoom)
 			m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
 			return m, m.renderCmd()
-		case "right", "l":
+		case "right", "l", "d":
 			m.lon += geo.PanAmount(m.zoom)
 			m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
 			return m, m.renderCmd()

@@ -18,14 +18,15 @@ import (
 // model holds all application state.
 // Rule: only Update() modifies the model.
 type model struct {
-	db     *tiles.DB
-	lat    float64
-	lon    float64
-	zoom   int
-	width  int // terminal columns (used for map canvas and border)
-	height int // terminal rows   (used for map canvas and border)
-	frame  string
-	status string
+	db       *tiles.DB
+	lat      float64
+	lon      float64
+	zoom     int
+	width    int  // terminal columns
+	height   int  // terminal rows
+	showHelp bool // toggle help overlay with '?'
+	frame    string
+	status   string
 }
 
 type frameReadyMsg string
@@ -41,9 +42,7 @@ func initialModel(db *tiles.DB) model {
 	}
 }
 
-func (m model) Init() tea.Cmd {
-	return nil
-}
+func (m model) Init() tea.Cmd { return nil }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -58,6 +57,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+
+		// Toggle help overlay
+		case "?":
+			m.showHelp = !m.showHelp
+			return m, nil
 
 		// Pan
 		case "up", "k", "w":
@@ -121,40 +125,51 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the full TUI:
+// View renders the full TUI as a magenta box:
 //
-//	╭──────── border top ────────╮
-//	│  braille map canvas        │  ← (m.height - 2) rows
-//	╰─ z:12  N↑  28.61°N … ─────╯
+//	╭────────────────────────────────────────╮
+//	│  braille map canvas  (m.height-2 rows) │
+//	╰─ z:12  N↑  28.6139°N  77.2090°E ──────╯
 func (m model) View() string {
-	frame := m.frame
-	if frame == "" {
-		// Placeholder while waiting for the first render — fill with blank lines.
-		frame = strings.Repeat("\n", max(m.height-2, 1))
-	}
-
 	bdr := lipgloss.NewStyle().Foreground(lipgloss.Color("201")) // magenta
 
+	innerW := max(m.width-2, 0) // content columns between the │ chars
+
 	// ── Top border ────────────────────────────────────────────────────────────
-	innerW := m.width - 2 // space between ╭ and ╮
-	if innerW < 0 {
-		innerW = 0
-	}
 	top := bdr.Render("╭" + strings.Repeat("─", innerW) + "╮")
 
-	// ── Bottom border with HUD content ────────────────────────────────────────
+	// ── Main content: map frame or help screen ─────────────────────────────────
+	var rawContent string
+	if m.showHelp {
+		rawContent = m.helpContent()
+	} else {
+		rawContent = m.frame
+		if rawContent == "" {
+			rawContent = strings.Repeat("\n", max(m.height-2, 1))
+		}
+	}
+
+	// Wrap every content line with magenta side borders.
+	// buf.Render() always ends each row with '\n'; TrimRight removes the trailing one
+	// so Split gives exactly (m.height-2) elements with no spurious empty last entry.
+	lines := strings.Split(strings.TrimRight(rawContent, "\n"), "\n")
+	var framed strings.Builder
+	for _, line := range lines {
+		framed.WriteString(bdr.Render("│") + line + bdr.Render("│") + "\n")
+	}
+
+	// ── Bottom border with HUD ─────────────────────────────────────────────────
 	hudText := m.hudText()
 
-	// Available space for HUD text inside "╰─ … ─╯"
-	// "╰─ " = 3 chars + " " before dashes + "─╯" = 2 chars → 6 total fixed chars
+	// "╰─ " = 3 chars  │  " " before dashes = 1  │  "─╯" = 2  → 6 reserved chars
 	available := m.width - 6
 	if available < 0 {
 		available = 0
 	}
-	runes := []rune(hudText)
-	if len(runes) > available {
-		runes = runes[:available]
-		hudText = string(runes)
+	hudRunes := []rune(hudText)
+	if len(hudRunes) > available {
+		hudRunes = hudRunes[:available]
+		hudText = string(hudRunes)
 	}
 	padLen := available - len([]rune(hudText))
 	if padLen < 0 {
@@ -170,21 +185,71 @@ func (m model) View() string {
 
 	bottom := bdr.Render("╰─ ") + hudStyled + bdr.Render(" "+strings.Repeat("─", padLen)+"╯")
 
-	// frame ends with '\n' for every row (from buf.Render()), so no extra '\n' needed.
-	return top + "\n" + frame + bottom
+	return top + "\n" + framed.String() + bottom
 }
 
-// hudText returns the plain HUD string (no lipgloss styling applied).
+// helpContent returns the help screen text, padded to fill the inner canvas
+// (m.width-2 columns × m.height-2 rows) so the side borders align correctly.
+func (m model) helpContent() string {
+	w := max(m.width-2, 0)
+	h := max(m.height-2, 0)
+
+	accent := lipgloss.NewStyle().Foreground(lipgloss.Color("109")) // sage teal
+	key := lipgloss.NewStyle().Foreground(lipgloss.Color("222"))    // warm off-white
+	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))    // dark grey
+
+	helpLines := []string{
+		"",
+		accent.Render("  NCR on Terminal") + dim.Render("  ─  keybindings"),
+		"",
+		accent.Render("  Navigation"),
+		"    " + key.Render("↑ k w") + dim.Render("  pan north    ") + key.Render("↓ j s") + dim.Render("  pan south"),
+		"    " + key.Render("← h a") + dim.Render("  pan west     ") + key.Render("→ l d") + dim.Render("  pan east"),
+		"",
+		accent.Render("  Zoom"),
+		"    " + key.Render("+ =") + dim.Render("         zoom in     ") + key.Render("- _") + dim.Render("       zoom out"),
+		"    " + key.Render("scroll ↑") + dim.Render("     zoom in     ") + key.Render("scroll ↓") + dim.Render("   zoom out"),
+		"",
+		accent.Render("  Map symbols"),
+		"    " + key.Render("M") + dim.Render("  metro station    ") + key.Render("T") + dim.Render("  rail/train station"),
+		"    " + key.Render("+") + dim.Render("  hospital         ") + key.Render("f") + dim.Render("  restaurant / café"),
+		"    " + key.Render("g") + dim.Render("  fuel station"),
+		"",
+		accent.Render("  Other"),
+		"    " + key.Render("?") + dim.Render("   toggle this help screen"),
+		"    " + key.Render("q") + dim.Render("   quit"),
+		"",
+		dim.Render("  ─────────────────────────────────────────────────"),
+		dim.Render("  Tip: for AMOLED appearance, set your terminal's"),
+		dim.Render("  background color to #000000 (pure black)."),
+	}
+
+	var sb strings.Builder
+	for i := 0; i < h; i++ {
+		var line string
+		if i < len(helpLines) {
+			line = helpLines[i]
+		}
+		// Pad the line to exactly w visual columns so the right │ border aligns.
+		pad := w - lipgloss.Width(line)
+		if pad < 0 {
+			pad = 0
+		}
+		sb.WriteString(line + strings.Repeat(" ", pad) + "\n")
+	}
+	return sb.String()
+}
+
+// hudText returns the plain HUD string (styling applied separately in View).
 func (m model) hudText() string {
 	zoom := fmt.Sprintf("z:%d", m.zoom)
-	compass := "N↑"
 	coords := fmt.Sprintf("%.4f°N  %.4f°E", m.lat, m.lon)
 	scale := zoomToScale(m.zoom)
 	loading := ""
 	if m.status == "Rendering..." {
-		loading = "⠿ rendering"
+		loading = "⠿"
 	}
-	parts := []string{zoom, compass, coords, scale}
+	parts := []string{zoom, "N↑", coords, scale}
 	if loading != "" {
 		parts = append(parts, loading)
 	}
@@ -192,13 +257,13 @@ func (m model) hudText() string {
 }
 
 // renderCmd triggers an async map render.
+// pixelW accounts for the two side-border columns (│ on each side).
 func (m model) renderCmd() tea.Cmd {
 	db := m.db
 	lat, lon := m.lat, m.lon
 	zoom := m.zoom
-	pixelW := m.width * 2
-	// -2 rows: 1 for top border bar + 1 for bottom HUD bar
-	pixelH := (m.height - 2) * 4
+	pixelW := (m.width - 2) * 2  // -2: one │ column on each side
+	pixelH := (m.height - 2) * 4 // -2: top border row + bottom HUD row
 
 	return func() tea.Msg {
 		frame := render.Render(render.RenderRequest{
@@ -217,7 +282,6 @@ func main() {
 	if len(os.Args) < 2 {
 		log.Fatal("Usage: mapscii <path-to.mbtiles>")
 	}
-
 	db, err := tiles.Open(os.Args[1])
 	if err != nil {
 		log.Fatalf("Failed to open MBTiles: %v", err)

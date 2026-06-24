@@ -17,19 +17,18 @@ type RenderRequest struct {
 	DB       *tiles.DB
 	Lat, Lon float64
 	Zoom     int
-	PixelW   int // braille pixel width  (= terminal cols * 2)
-	PixelH   int // braille pixel height (= terminal rows * 4)
+	PixelW   int // braille pixel width  (= (termCols-2) * 2)
+	PixelH   int // braille pixel height (= (termRows-2) * 4)
 }
 
 // Label holds a text label to be written into the braille buffer's text overlay.
 type Label struct {
 	Text  string
-	ColX  int // terminal column (0-indexed)
-	RowY  int // terminal row   (0-indexed)
+	ColX  int // terminal column (0-indexed, relative to canvas left edge)
+	RowY  int // terminal row   (0-indexed, relative to canvas top edge)
 	Color int // xterm-256 index; 0 = terminal default
 }
 
-// findLayer returns the named layer from an mvt.Layers slice, or nil.
 func findLayer(layers mvt.Layers, name string) *mvt.Layer {
 	for _, layer := range layers {
 		if layer != nil && layer.Name == name {
@@ -40,7 +39,6 @@ func findLayer(layers mvt.Layers, name string) *mvt.Layer {
 }
 
 // Render builds a full frame string from the given request.
-// Called inside a BubbleTea Cmd (goroutine) so it may block.
 func Render(req RenderRequest) string {
 	buf := braille.New(req.PixelW/2, req.PixelH/4)
 	buf.Clear()
@@ -51,9 +49,6 @@ func Render(req RenderRequest) string {
 	}
 	tileRequests := vp.ComputeTiles()
 
-	// Draw order: background layers first, labels/POI last.
-	// transportation_name is a dedicated label layer in this tile set.
-	// place is last so city names sit above everything.
 	layerOrder := []string{
 		"landcover", "landuse", "water", "waterway",
 		"boundary", "transportation", "transportation_name",
@@ -61,9 +56,12 @@ func Render(req RenderRequest) string {
 	}
 
 	var labels []Label
-	// seenRoadLabels deduplicates road names — a long road spans many tile segments
-	// each carrying the same name.
 	seenRoadLabels := make(map[string]bool)
+
+	// POI diagnostic: log the first 15 POI class+subclass pairs so we can
+	// verify the allowlist names match the tile set.
+	// Remove once POI rendering is confirmed working.
+	poiDumps := 0
 
 	isFirstTile := true
 	for _, req2 := range tileRequests {
@@ -96,8 +94,14 @@ func Render(req RenderRequest) string {
 			for _, feature := range layer.Features {
 				class, _ := feature.Properties["class"].(string)
 
-				// For the POI layer, try a class/subclass combined key first so that
-				// "poi/railway/subway" beats the generic "poi/railway" fallback.
+				// POI diagnostic — log class/subclass to verify allowlist names
+				if layerName == "poi" && poiDumps < 15 {
+					subclass, _ := feature.Properties["subclass"].(string)
+					log.Debugf("POI: class=%q subclass=%q", class, subclass)
+					poiDumps++
+				}
+
+				// For POI: try class+subclass combined key first (e.g. "railway/subway")
 				var st style.LayerStyle
 				var ok bool
 				if layerName == "poi" {
@@ -119,14 +123,12 @@ func Render(req RenderRequest) string {
 				drawGeometry(buf, simplified, req2, st)
 
 				if st.DrawLabel {
-					// Use LabelSymbol (single char) for POI markers; full name for everything else.
 					var text string
 					if st.LabelSymbol != "" {
 						text = st.LabelSymbol
 					} else {
 						text = featureName(feature.Properties)
 					}
-
 					if text != "" {
 						isRoadLayer := layerName == "transportation" ||
 							layerName == "transportation_name"
@@ -158,8 +160,8 @@ func Render(req RenderRequest) string {
 	return buf.Render()
 }
 
-// featureName returns the best available display name for a feature.
-// This tile set stores names under "name:latin"; we also try the standard keys.
+// featureName tries several property keys to find a display name.
+// This tile set uses "name:latin" rather than the standard "name".
 func featureName(props map[string]interface{}) string {
 	for _, key := range []string{"name", "name:latin", "name:en", "name_en", "ref"} {
 		if v, ok := props[key].(string); ok && v != "" {
@@ -169,11 +171,8 @@ func featureName(props map[string]interface{}) string {
 	return ""
 }
 
-// writeLabelsToBuffer writes collected label text into the braille buffer's
-// text overlay layer. A per-cell occupancy grid prevents overlapping labels.
 func writeLabelsToBuffer(buf *braille.Buffer, labels []Label, termW, termH int) {
 	occupied := make(map[[2]int]bool)
-
 	for _, l := range labels {
 		if l.ColX < 0 || l.RowY < 0 || l.RowY >= termH {
 			continue
@@ -204,7 +203,6 @@ func writeLabelsToBuffer(buf *braille.Buffer, labels []Label, termW, termH int) 
 	}
 }
 
-// featurePoint returns a representative tile-space coordinate for label placement.
 func featurePoint(g orb.Geometry) (x, y float64, ok bool) {
 	switch geom := g.(type) {
 	case orb.Point:
@@ -249,7 +247,6 @@ func featurePoint(g orb.Geometry) (x, y float64, ok bool) {
 	return
 }
 
-// drawGeometry dispatches to the appropriate draw primitive.
 func drawGeometry(buf *braille.Buffer, g orb.Geometry, req geo.TileRequest, st style.LayerStyle) {
 	switch geom := g.(type) {
 	case orb.LineString:

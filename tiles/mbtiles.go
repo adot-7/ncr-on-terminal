@@ -109,6 +109,14 @@ func gunzip(data []byte) ([]byte, error) {
 	_, err = buf.ReadFrom(r)
 	return buf.Bytes(), err
 }
+func (d *DB) ReadMetadata() {
+	var res string
+	err := d.db.QueryRow("SELECT value from metadata where name=\"center\"").Scan(&res)
+	if err != nil {
+		log.Debug("error metadata: ", err)
+	}
+	log.Debug("metadata: ", res)
+}
 
 // Close releases the database.
 func (d *DB) Close() error {

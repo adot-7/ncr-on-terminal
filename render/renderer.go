@@ -1,9 +1,6 @@
 package render
 
 import (
-	"fmt"
-	"strings"
-
 	"teaTui/braille"
 	"teaTui/geo"
 	"teaTui/style"
@@ -24,7 +21,7 @@ type RenderRequest struct {
 	PixelH   int // braille pixel height (= terminal rows * 4)
 }
 
-// Label holds a text label to be overlaid on the braille frame.
+// Label holds a text label to be written into the braille buffer's text overlay.
 type Label struct {
 	Text  string
 	ColX  int // terminal column (0-indexed)
@@ -149,16 +146,20 @@ func Render(req RenderRequest) string {
 		}
 	}
 
+	// Step 5: Write labels into the buffer's text overlay layer, then render.
+	// Labels are written after all geometry so they can't be overdrawn by later tiles.
 	termW := req.PixelW / 2
 	termH := req.PixelH / 4
-	return buf.Render() + renderLabels(labels, termW, termH)
+	writeLabelsToBuffer(buf, labels, termW, termH)
+	return buf.Render()
 }
 
-// renderLabels overlays text labels using ANSI cursor positioning.
-// Labels are rendered in the order they arrive (priority is baked into layerOrder).
-// A per-cell occupancy grid ensures no two labels share a terminal cell.
-func renderLabels(labels []Label, termW, termH int) string {
-	var sb strings.Builder
+// writeLabelsToBuffer writes collected label text directly into the braille buffer's
+// text overlay layer. Labels are written in order; a per-cell occupancy grid
+// prevents any two labels from overlapping. Because the overlay is part of the
+// buffer, the text is serialized inline by buf.Render() — no cursor-position
+// escapes needed, and BubbleTea's renderer sees a plain string with no jumps.
+func writeLabelsToBuffer(buf *braille.Buffer, labels []Label, termW, termH int) {
 	occupied := make(map[[2]int]bool)
 
 	for _, l := range labels {
@@ -170,12 +171,11 @@ func renderLabels(labels []Label, termW, termH int) string {
 			continue
 		}
 
-		// Truncate to fit within the terminal width
+		// Truncate text to fit within the terminal width
 		runes := []rune(l.Text)
 		if len(runes) > maxLen {
 			runes = runes[:maxLen]
 		}
-		text := string(runes)
 
 		// Skip if any cell this label needs is already occupied
 		collision := false
@@ -189,23 +189,13 @@ func renderLabels(labels []Label, termW, termH int) string {
 			continue
 		}
 
-		// Mark cells as occupied
-		for i := range runes {
-			occupied[[2]int{l.ColX + i, l.RowY}] = true
-		}
-
-		// Emit ANSI cursor-position + optional color + text + reset.
-		// ANSI row/col are 1-indexed, so add 1 to both.
-		if l.Color != 0 {
-			sb.WriteString(fmt.Sprintf(
-				"\x1b[%d;%dH\x1b[38;5;%dm%s\x1b[0m",
-				l.RowY+1, l.ColX+1, l.Color, text,
-			))
-		} else {
-			sb.WriteString(fmt.Sprintf("\x1b[%d;%dH%s", l.RowY+1, l.ColX+1, text))
+		// Write each character into the buffer and mark cells occupied
+		for i, r := range runes {
+			col := l.ColX + i
+			occupied[[2]int{col, l.RowY}] = true
+			buf.SetText(col, l.RowY, r, l.Color)
 		}
 	}
-	return sb.String()
 }
 
 // featurePoint returns a representative tile-space coordinate for label placement.
@@ -290,8 +280,12 @@ func drawGeometry(buf *braille.Buffer, g orb.Geometry, req geo.TileRequest, st s
 			}
 		}
 	case orb.Point:
-		px, py := tileToPixel(geom[0], geom[1], req)
-		buf.SetPixel(px, py, st.LineColor)
+		// Only draw the dot if this style explicitly wants a line/point marker.
+		// Layers like "poi" that use DrawLabel only must not emit stray pixels.
+		if st.DrawLine {
+			px, py := tileToPixel(geom[0], geom[1], req)
+			buf.SetPixel(px, py, st.LineColor)
+		}
 	}
 }
 

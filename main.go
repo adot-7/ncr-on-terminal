@@ -19,12 +19,13 @@ import (
 // Rule: only Update() modifies the model.
 type model struct {
 	db       *tiles.DB
+	cache    *render.TileCache // MVT layer cache — shared with renderCmd goroutines
 	lat      float64
 	lon      float64
 	zoom     int
-	width    int  // terminal columns
-	height   int  // terminal rows
-	showHelp bool // toggle help overlay with '?'
+	width    int
+	height   int
+	showHelp bool
 	frame    string
 	status   string
 }
@@ -36,7 +37,8 @@ func initialModel(db *tiles.DB) model {
 	db.ReadMetadata()
 	return model{
 		db:     db,
-		lat:    28.6139, // Delhi center
+		cache:  render.NewTileCache(db),
+		lat:    28.6139,
 		lon:    77.2090,
 		zoom:   12,
 		status: "Waiting for terminal size...",
@@ -58,13 +60,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
-
-		// Toggle help overlay
 		case "?":
 			m.showHelp = !m.showHelp
 			return m, nil
-
-		// Pan
 		case "up", "k", "w":
 			m.lat += geo.PanAmount(m.zoom)
 			m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
@@ -81,8 +79,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lon += geo.PanAmount(m.zoom)
 			m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
 			return m, m.renderCmd()
-
-		// Zoom
 		case "+", "=":
 			if m.zoom < 15 {
 				m.zoom++
@@ -97,7 +93,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	// Mouse wheel → zoom in/out
 	case tea.MouseMsg:
 		switch msg.Button {
 		case tea.MouseButtonWheelUp:
@@ -127,14 +122,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	bdr := lipgloss.NewStyle().Foreground(lipgloss.Color("201")) // magenta
-
-	innerW := max(m.width-2, 0) // content columns between the │ chars
-
-	// ── Top border ────────────────────────────────────────────────────────────
+	bdr := lipgloss.NewStyle().Foreground(lipgloss.Color("201"))
+	innerW := max(m.width-2, 0)
 	top := bdr.Render("╭" + strings.Repeat("─", innerW) + "╮")
 
-	// ── Main content: map frame or help screen ─────────────────────────────────
 	var rawContent string
 	if m.showHelp {
 		rawContent = m.helpContent()
@@ -145,19 +136,13 @@ func (m model) View() string {
 		}
 	}
 
-	// Wrap every content line with magenta side borders.
-	// buf.Render() always ends each row with '\n'; TrimRight removes the trailing one
-	// so Split gives exactly (m.height-2) elements with no spurious empty last entry.
 	lines := strings.Split(strings.TrimRight(rawContent, "\n"), "\n")
 	var framed strings.Builder
 	for _, line := range lines {
 		framed.WriteString(bdr.Render("│") + line + bdr.Render("│") + "\n")
 	}
 
-	// ── Bottom border with HUD ─────────────────────────────────────────────────
 	hudText := m.hudText()
-
-	// "╰─ " = 3 chars  │  " " before dashes = 1  │  "─╯" = 2  → 6 reserved chars
 	available := m.width - 6
 	if available < 0 {
 		available = 0
@@ -180,20 +165,15 @@ func (m model) View() string {
 	}
 
 	bottom := bdr.Render("╰─ ") + hudStyled + bdr.Render(" "+strings.Repeat("─", padLen)+"╯")
-
 	return top + "\n" + framed.String() + bottom
 }
 
-// helpContent returns the help screen text, padded to fill the inner canvas
-// (m.width-2 columns × m.height-2 rows) so the side borders align correctly.
 func (m model) helpContent() string {
 	w := max(m.width-2, 0)
 	h := max(m.height-2, 0)
-
-	accent := lipgloss.NewStyle().Foreground(lipgloss.Color("109")) // sage teal
-	key := lipgloss.NewStyle().Foreground(lipgloss.Color("222"))    // warm off-white
-	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))    // dark grey
-
+	accent := lipgloss.NewStyle().Foreground(lipgloss.Color("109"))
+	key := lipgloss.NewStyle().Foreground(lipgloss.Color("222"))
+	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 	helpLines := []string{
 		"",
 		accent.Render("  NCR on Terminal") + dim.Render("  ─  keybindings"),
@@ -215,18 +195,14 @@ func (m model) helpContent() string {
 		"    " + key.Render("?") + dim.Render("   toggle this help screen"),
 		"    " + key.Render("q") + dim.Render("   quit"),
 		"",
-		dim.Render("  ─────────────────────────────────────────────────"),
-		dim.Render("  Tip: set your terminal's background color to #000000"),
-		// dim.Render("  background color to #000000")
+		dim.Render("  Tip: set terminal background to #000000 for AMOLED look"),
 	}
-
 	var sb strings.Builder
 	for i := 0; i < h; i++ {
 		var line string
 		if i < len(helpLines) {
 			line = helpLines[i]
 		}
-		// Pad the line to exactly w visual columns so the right │ border aligns.
 		pad := w - lipgloss.Width(line)
 		if pad < 0 {
 			pad = 0
@@ -236,34 +212,24 @@ func (m model) helpContent() string {
 	return sb.String()
 }
 
-// hudText returns the plain HUD string (styling applied separately in View).
 func (m model) hudText() string {
 	zoom := fmt.Sprintf("z:%d", m.zoom)
 	coords := fmt.Sprintf("%.4f°N  %.4f°E", m.lat, m.lon)
 	scale := zoomToScale(m.zoom)
-	// loading := ""
-	// if m.status == "Rendering..." {
-	// 	loading = "⠿"
-	// }
-	parts := []string{zoom, "N↑", coords, scale, "Help: ?"}
-	// if loading != "" {
-	// 	parts = append(parts, loading)
-	// }
+	parts := []string{zoom, "N↑", coords, scale, "? help"}
 	return strings.Join(parts, " │ ")
 }
 
-// renderCmd triggers an async map render.
-// pixelW accounts for the two side-border columns (│ on each side).
 func (m model) renderCmd() tea.Cmd {
-	db := m.db
+	cache := m.cache
 	lat, lon := m.lat, m.lon
 	zoom := m.zoom
-	pixelW := (m.width - 2) * 2  // -2: one │ column on each side
-	pixelH := (m.height - 2) * 4 // -2: top border row + bottom HUD row
+	pixelW := (m.width - 2) * 2
+	pixelH := (m.height - 2) * 4
 
 	return func() tea.Msg {
 		frame := render.Render(render.RenderRequest{
-			DB:     db,
+			DB:     cache,
 			Lat:    lat,
 			Lon:    lon,
 			Zoom:   zoom,
@@ -276,7 +242,7 @@ func (m model) renderCmd() tea.Cmd {
 
 func main() {
 	if len(os.Args) < 2 {
-		log.Fatal("Usage: mapscii <path-to.mbtiles>")
+		log.Fatal("Usage: ncr-on-terminal <path-to.mbtiles>")
 	}
 	db, err := tiles.Open(os.Args[1])
 	db.ReadMetadata()
@@ -290,7 +256,7 @@ func main() {
 		panic(err)
 	}
 	log.SetOutput(f)
-	log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.WarnLevel) // suppress noisy debug logs
 	log.SetReportCaller(true)
 
 	p := tea.NewProgram(

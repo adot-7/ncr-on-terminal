@@ -4,7 +4,6 @@ import (
 	"teaTui/braille"
 	"teaTui/geo"
 	"teaTui/style"
-	"teaTui/tiles"
 
 	"github.com/charmbracelet/log"
 	"github.com/paulmach/orb"
@@ -14,7 +13,7 @@ import (
 
 // RenderRequest bundles everything needed for one frame.
 type RenderRequest struct {
-	DB       *tiles.DB
+	DB       *TileCache // uses the MVT-layer cache — not tiles.DB directly
 	Lat, Lon float64
 	Zoom     int
 	PixelW   int // braille pixel width  (= (termCols-2) * 2)
@@ -24,9 +23,9 @@ type RenderRequest struct {
 // Label holds a text label to be written into the braille buffer's text overlay.
 type Label struct {
 	Text  string
-	ColX  int // terminal column (0-indexed, relative to canvas left edge)
-	RowY  int // terminal row   (0-indexed, relative to canvas top edge)
-	Color int // xterm-256 index; 0 = terminal default
+	ColX  int
+	RowY  int
+	Color int
 }
 
 func findLayer(layers mvt.Layers, name string) *mvt.Layer {
@@ -58,25 +57,18 @@ func Render(req RenderRequest) string {
 	var labels []Label
 	seenRoadLabels := make(map[string]bool)
 
-	// POI diagnostic: log the first 15 POI class+subclass pairs so we can
-	// verify the allowlist names match the tile set.
-	// Remove once POI rendering is confirmed working.
-	poiDumps := 0
-
 	isFirstTile := true
 	for _, req2 := range tileRequests {
-		data, err := req.DB.ReadTile(req2.Z, req2.X, req2.Y)
-		if err != nil || data == nil {
-			continue
-		}
-		layers, err := mvt.Unmarshal(data)
-		if err != nil {
+		// ReadLayers returns cached parsed MVT — mvt.Unmarshal only runs once
+		// per tile position for the lifetime of this TileCache session.
+		layers, err := req.DB.ReadLayers(req2.Z, req2.X, req2.Y)
+		if err != nil || layers == nil {
 			continue
 		}
 		if isFirstTile {
 			for _, l := range layers {
 				if l != nil {
-					log.Debugf("Layer and features:%s (%d)", l.Name, len(l.Features))
+					log.Debugf("Layer:%s (%d features)", l.Name, len(l.Features))
 				}
 			}
 			isFirstTile = false
@@ -94,14 +86,6 @@ func Render(req RenderRequest) string {
 			for _, feature := range layer.Features {
 				class, _ := feature.Properties["class"].(string)
 
-				// POI diagnostic — log class/subclass to verify allowlist names
-				if layerName == "poi" && poiDumps < 15 {
-					subclass, _ := feature.Properties["subclass"].(string)
-					log.Debugf("POI: class=%q subclass=%q", class, subclass)
-					poiDumps++
-				}
-
-				// For POI: try class+subclass combined key first (e.g. "railway/subway")
 				var st style.LayerStyle
 				var ok bool
 				if layerName == "poi" {
@@ -160,8 +144,6 @@ func Render(req RenderRequest) string {
 	return buf.Render()
 }
 
-// featureName tries several property keys to find a display name.
-// This tile set uses "name:latin" rather than the standard "name".
 func featureName(props map[string]interface{}) string {
 	for _, key := range []string{"name", "name:latin", "name:en", "name_en", "ref"} {
 		if v, ok := props[key].(string); ok && v != "" {

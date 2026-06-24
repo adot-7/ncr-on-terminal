@@ -13,9 +13,10 @@ A terminal map viewer for the Delhi National Capital Region built with [BubbleTe
 
 ```sh
 ssh ncr.akashparashar.dev
+#Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
 ```
 
-> **Note:** The SSH demo server may be slow due to many concurrent users not always be running. See [Local install](#install) to run it yourself. 
+> **Note:** The SSH demo server may be slow due to many concurrent users and may not always be running. See [Local install](#install) to run it yourself. 
 
 ---
 

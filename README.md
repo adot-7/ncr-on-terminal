@@ -12,10 +12,10 @@ A terminal map viewer for the Delhi National Capital Region built with [BubbleTe
 ## Try it instantly (no install required)
 
 ```sh
-ssh ncr.akashparashar.dev -p 2222
+ssh ncr.akashparashar.dev
 ```
 
-> **Note:** The SSH demo server may not always be running. See [Local install](#install) to run it yourself.
+> **Note:** The SSH demo server may be slow due to many concurrent users not always be running. See [Local install](#install) to run it yourself. 
 
 ---
 
@@ -136,28 +136,28 @@ ncr-on-terminal/
 
 ## Controls
 
-| Key | Action |
-|---|---|
-| `↑` `↓` `←` `→` | Pan the map |
-| `w` `a` `s` `d` | Pan (WASD) |
-| `k` `h` `j` `l` | Pan (vim-style) |
-| `+` / `=` | Zoom in |
-| `-` / `_` | Zoom out |
-| Scroll wheel | Zoom in / out |
-| `?` | Toggle help screen |
-| `q` / `Ctrl+C` | Quit |
+| Key             | Action                             |
+| --------------- | ---------------------------------- |
+| `↑` `↓` `←` `→` | Pan the map                        |
+| `w` `a` `s` `d` | Pan (WASD)                         |
+| `k` `h` `j` `l` | Pan (vim-style)                    |
+| `+` / `=`       | Zoom in                            |
+| `-` / `_`       | Zoom out                           |
+| Scroll wheel    | Zoom in / out (except in ssh mode) |
+| `?`             | Toggle help screen                 |
+| `q` / `Ctrl+C`  | Quit                               |
 
 ---
 
 ## Map symbols
 
-| Symbol | Meaning |
-|---|---|
-| `M` (cyan) | Metro / subway station |
-| `T` (blue) | Railway / train station |
-| `+` (red) | Hospital |
-| `f` (amber) | Restaurant / food |
-| `g` (green) | Fuel station |
+| Symbol      | Meaning                 |
+| ----------- | ----------------------- |
+| `M` (cyan)  | Metro / subway station  |
+| `T` (blue)  | Railway / train station |
+| `+` (red)   | Hospital                |
+| `🍴`, etc   | Restaurant / food       |
+| `g` (green) | Fuel station            |
 
 Coloured road names, place labels (towns, suburbs), and building outlines appear as you zoom in.
 

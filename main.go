@@ -34,6 +34,7 @@ type frameReadyMsg string
 type statusMsg string
 
 func initialModel(db *tiles.DB) model {
+	db.ReadMetadata()
 	return model{
 		db:     db,
 		cache:  render.NewTileCache(db),
@@ -244,6 +245,7 @@ func main() {
 		log.Fatal("Usage: ncr-on-terminal <path-to.mbtiles>")
 	}
 	db, err := tiles.Open(os.Args[1])
+	db.ReadMetadata()
 	if err != nil {
 		log.Fatalf("Failed to open MBTiles: %v", err)
 	}

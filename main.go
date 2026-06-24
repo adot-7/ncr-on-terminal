@@ -16,20 +16,18 @@ import (
 )
 
 // model holds all application state.
-// Rule: only Update() modifies the model. Nothing else.
+// Rule: only Update() modifies the model.
 type model struct {
 	db     *tiles.DB
 	lat    float64
 	lon    float64
 	zoom   int
-	width  int // terminal columns
-	height int // terminal rows
+	width  int // terminal columns (used for map canvas and border)
+	height int // terminal rows   (used for map canvas and border)
 	frame  string
 	status string
 }
 
-// These are your custom Msg types.
-// Any Go type can be a Msg. We define specific types for clarity.
 type frameReadyMsg string
 type statusMsg string
 
@@ -44,7 +42,6 @@ func initialModel(db *tiles.DB) model {
 }
 
 func (m model) Init() tea.Cmd {
-	// Nothing to do at startup; we wait for WindowSizeMsg
 	return nil
 }
 
@@ -52,7 +49,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case tea.WindowSizeMsg:
-		// Terminal size is now known (or changed).
 		m.width = msg.Width
 		m.height = msg.Height
 		m.status = "Rendering..."
@@ -63,7 +59,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 
-		// Pan (move the viewport)
+		// Pan
 		case "up", "k", "w":
 			m.lat += geo.PanAmount(m.zoom)
 			m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
@@ -81,27 +77,39 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
 			return m, m.renderCmd()
 
-		// Zoom in/out
+		// Zoom
 		case "+", "=":
 			if m.zoom < 15 {
 				m.zoom++
-			} else {
-				return m, nil
+				m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
+				return m, m.renderCmd()
 			}
-			m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
-			return m, m.renderCmd()
 		case "-", "_":
 			if m.zoom > 5 {
 				m.zoom--
-			} else {
-				return m, nil
+				m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
+				return m, m.renderCmd()
 			}
-			m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
-			return m, m.renderCmd()
+		}
+
+	// Mouse wheel → zoom in/out
+	case tea.MouseMsg:
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
+			if m.zoom < 15 {
+				m.zoom++
+				m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
+				return m, m.renderCmd()
+			}
+		case tea.MouseButtonWheelDown:
+			if m.zoom > 5 {
+				m.zoom--
+				m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
+				return m, m.renderCmd()
+			}
 		}
 
 	case frameReadyMsg:
-		// The async render finished. Store the frame.
 		m.frame = string(msg)
 		return m, nil
 
@@ -113,32 +121,84 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View is called after every Update. It must be fast.
-// We just return the last computed frame string.
+// View renders the full TUI:
+//
+//	╭──────── border top ────────╮
+//	│  braille map canvas        │  ← (m.height - 2) rows
+//	╰─ z:12  N↑  28.61°N … ─────╯
 func (m model) View() string {
 	frame := m.frame
 	if frame == "" {
-		frame = strings.Repeat("\n", max(m.height-1, 1))
+		// Placeholder while waiting for the first render — fill with blank lines.
+		frame = strings.Repeat("\n", max(m.height-2, 1))
 	}
 
-	hud := m.hud()
+	bdr := lipgloss.NewStyle().Foreground(lipgloss.Color("201")) // magenta
+
+	// ── Top border ────────────────────────────────────────────────────────────
+	innerW := m.width - 2 // space between ╭ and ╮
+	if innerW < 0 {
+		innerW = 0
+	}
+	top := bdr.Render("╭" + strings.Repeat("─", innerW) + "╮")
+
+	// ── Bottom border with HUD content ────────────────────────────────────────
+	hudText := m.hudText()
+
+	// Available space for HUD text inside "╰─ … ─╯"
+	// "╰─ " = 3 chars + " " before dashes + "─╯" = 2 chars → 6 total fixed chars
+	available := m.width - 6
+	if available < 0 {
+		available = 0
+	}
+	runes := []rune(hudText)
+	if len(runes) > available {
+		runes = runes[:available]
+		hudText = string(runes)
+	}
+	padLen := available - len([]rune(hudText))
+	if padLen < 0 {
+		padLen = 0
+	}
+
+	var hudStyled string
 	if m.status == "Rendering..." {
-		// dim the HUD to indicate stale frame
-		hud = mutedStyle.Foreground(lipgloss.Color("240")).Render(m.hud())
+		hudStyled = mutedStyle.Foreground(lipgloss.Color("240")).Render(hudText)
+	} else {
+		hudStyled = mutedStyle.Render(hudText)
 	}
 
-	return frame + "\n" + hud
+	bottom := bdr.Render("╰─ ") + hudStyled + bdr.Render(" "+strings.Repeat("─", padLen)+"╯")
+
+	// frame ends with '\n' for every row (from buf.Render()), so no extra '\n' needed.
+	return top + "\n" + frame + bottom
 }
 
-// renderCmd returns a Cmd that renders the map in a goroutine.
-// Capture all values by copy — the goroutine may run after the model has changed.
+// hudText returns the plain HUD string (no lipgloss styling applied).
+func (m model) hudText() string {
+	zoom := fmt.Sprintf("z:%d", m.zoom)
+	compass := "N↑"
+	coords := fmt.Sprintf("%.4f°N  %.4f°E", m.lat, m.lon)
+	scale := zoomToScale(m.zoom)
+	loading := ""
+	if m.status == "Rendering..." {
+		loading = "⠿ rendering"
+	}
+	parts := []string{zoom, compass, coords, scale}
+	if loading != "" {
+		parts = append(parts, loading)
+	}
+	return strings.Join(parts, "  │  ")
+}
+
+// renderCmd triggers an async map render.
 func (m model) renderCmd() tea.Cmd {
 	db := m.db
 	lat, lon := m.lat, m.lon
 	zoom := m.zoom
-	// Braille pixel dimensions
 	pixelW := m.width * 2
-	pixelH := (m.height - 1) * 4 // -1 for the status line
+	// -2 rows: 1 for top border bar + 1 for bottom HUD bar
+	pixelH := (m.height - 2) * 4
 
 	return func() tea.Msg {
 		frame := render.Render(render.RenderRequest{
@@ -163,6 +223,7 @@ func main() {
 		log.Fatalf("Failed to open MBTiles: %v", err)
 	}
 	defer db.Close()
+
 	f, err := os.OpenFile("trip.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		panic(err)
@@ -170,48 +231,20 @@ func main() {
 	log.SetOutput(f)
 	log.SetLevel(log.DebugLevel)
 	log.SetReportCaller(true)
+
 	p := tea.NewProgram(
 		initialModel(db),
-		tea.WithAltScreen(),       // Use the alternate screen buffer (full terminal)
-		tea.WithMouseCellMotion(), // Optional: enable mouse for later
+		tea.WithAltScreen(),
+		tea.WithMouseCellMotion(),
 	)
-
 	if _, err := p.Run(); err != nil {
 		log.Fatalf("Error: %v", err)
 	}
 }
 
-func (m model) hud() string {
-	zoom := fmt.Sprintf("zoom: %d", m.zoom)
-
-	// Compass
-	compass := "N↑"
-
-	// Coordinates
-	coords := fmt.Sprintf("%.4f°N  %.4f°E", m.lat, m.lon)
-
-	// Scale indicator
-	scale := zoomToScale(m.zoom)
-
-	// Loading indicator
-	loading := ""
-	if m.status == "Rendering..." {
-		loading = " ⠿ rendering..."
-	}
-
-	// Pack them together with separators
-	parts := []string{zoom, compass, coords, scale, loading}
-	line := strings.Join(parts, "  │  ")
-
-	// Style it
-	return mutedStyle.Render(line)
-}
-
 var mutedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 
 func zoomToScale(zoom int) string {
-	// Approximate ground distance per tile at each zoom (at ~28°N latitude)
-	// Scale in km for one tile width at Delhi's latitude
 	scales := map[int]string{
 		5: "~500km", 6: "~250km", 7: "~125km",
 		8: "~60km", 9: "~30km", 10: "~15km",

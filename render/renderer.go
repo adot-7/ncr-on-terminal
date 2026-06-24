@@ -53,8 +53,6 @@ func Render(req RenderRequest) string {
 	tileRequests := vp.ComputeTiles()
 
 	// Step 2: Define the draw order for layers.
-	// We iterate layers in this order so that buildings appear on top of roads,
-	// roads appear on top of land cover, etc.
 	// "place" is last so city/town names render on top of everything.
 	layerOrder := []string{
 		"landcover", "landuse", "water", "waterway",
@@ -63,8 +61,6 @@ func Render(req RenderRequest) string {
 
 	// Step 3: Load and draw each tile, collecting labels along the way.
 	var labels []Label
-	// seenLabels deduplicates road names: each unique road name appears at most
-	// once per rendered frame (roads have many short segments, each with the same name).
 	seenLabels := make(map[string]bool)
 
 	isFirstTile := true
@@ -72,7 +68,7 @@ func Render(req RenderRequest) string {
 
 		data, err := req.DB.ReadTile(req2.Z, req2.X, req2.Y)
 		if err != nil || data == nil {
-			continue // tile missing or read error — just skip it
+			continue
 		}
 
 		layers, err := mvt.Unmarshal(data)
@@ -88,42 +84,32 @@ func Render(req RenderRequest) string {
 			isFirstTile = false
 		}
 
-		// Step 4: Draw layers in order
 		for _, layerName := range layerOrder {
 			layer := findLayer(layers, layerName)
 			if layer == nil {
 				continue
 			}
 
-			// Simplify geometry to reduce points we don't need at this resolution
-			// tolerance: roughly 0.5 screen pixels worth of tile units
-			tolerance := 4096.0 / float64(256) * 0.5 // ≈ 8 tile units per half-pixel
+			tolerance := 4096.0 / float64(256) * 0.5
 			simplifier := simplify.DouglasPeucker(tolerance)
 
 			for _, feature := range layer.Features {
-				// Get class for more specific style lookup
 				class, _ := feature.Properties["class"].(string)
 
 				st, ok := style.StyleFor(layerName, class, req.Zoom)
 				if !ok {
-					continue // don't draw this feature
+					continue
 				}
 
-				// Simplify before transforming
 				simplified := simplifier.Simplify(feature.Geometry)
-
-				// Draw geometry
 				drawGeometry(buf, simplified, req2, st)
 
-				// Collect label if this layer/style opts in
 				if st.DrawLabel {
 					name, _ := feature.Properties["name"].(string)
 					if name == "" {
 						name, _ = feature.Properties["name_en"].(string)
 					}
 					if name != "" {
-						// Deduplicate road segment labels — one label per unique road name per frame.
-						// POIs and place names are not deduplicated (each is a distinct feature).
 						if layerName == "transportation" && seenLabels[name] {
 							continue
 						}
@@ -146,38 +132,57 @@ func Render(req RenderRequest) string {
 		}
 	}
 
-	// Step 5: Write labels into the buffer's text overlay layer, then render.
-	// Labels are written after all geometry so they can't be overdrawn by later tiles.
 	termW := req.PixelW / 2
 	termH := req.PixelH / 4
+
+	// --- DIAGNOSTIC ---
+	// 1. Log how many labels were collected and where the first few land.
+	log.Debugf("LABELS: collected=%d  termW=%d termH=%d", len(labels), termW, termH)
+	for i, l := range labels {
+		if i >= 8 {
+			break
+		}
+		log.Debugf("  label[%d] %q  col=%d row=%d", i, l.Text, l.ColX, l.RowY)
+	}
+
+	// 2. Hardcoded test: paint a bright magenta "*" at cell (3,3).
+	//    If you can see it on screen, the text-overlay mechanism is working and
+	//    the problem is purely in label data / coordinates.
+	//    Remove this block once labels are confirmed working.
+	testColor := braille.RGBToXterm256(255, 0, 255) // magenta
+	for i, r := range []rune("*LABEL*") {
+		buf.SetText(3+i, 3, r, testColor)
+	}
+	// --- END DIAGNOSTIC ---
+
 	writeLabelsToBuffer(buf, labels, termW, termH)
 	return buf.Render()
 }
 
 // writeLabelsToBuffer writes collected label text directly into the braille buffer's
-// text overlay layer. Labels are written in order; a per-cell occupancy grid
-// prevents any two labels from overlapping. Because the overlay is part of the
-// buffer, the text is serialized inline by buf.Render() — no cursor-position
-// escapes needed, and BubbleTea's renderer sees a plain string with no jumps.
+// text overlay layer. A per-cell occupancy grid prevents overlapping labels.
 func writeLabelsToBuffer(buf *braille.Buffer, labels []Label, termW, termH int) {
 	occupied := make(map[[2]int]bool)
+	written, skipped := 0, 0
 
 	for _, l := range labels {
 		if l.ColX < 0 || l.RowY < 0 || l.RowY >= termH {
+			log.Debugf("LABEL skip OOB: %q col=%d row=%d", l.Text, l.ColX, l.RowY)
+			skipped++
 			continue
 		}
 		maxLen := termW - l.ColX
 		if maxLen <= 0 {
+			log.Debugf("LABEL skip maxLen: %q col=%d termW=%d", l.Text, l.ColX, termW)
+			skipped++
 			continue
 		}
 
-		// Truncate text to fit within the terminal width
 		runes := []rune(l.Text)
 		if len(runes) > maxLen {
 			runes = runes[:maxLen]
 		}
 
-		// Skip if any cell this label needs is already occupied
 		collision := false
 		for i := range runes {
 			if occupied[[2]int{l.ColX + i, l.RowY}] {
@@ -186,26 +191,22 @@ func writeLabelsToBuffer(buf *braille.Buffer, labels []Label, termW, termH int) 
 			}
 		}
 		if collision {
+			skipped++
 			continue
 		}
 
-		// Write each character into the buffer and mark cells occupied
 		for i, r := range runes {
 			col := l.ColX + i
 			occupied[[2]int{col, l.RowY}] = true
 			buf.SetText(col, l.RowY, r, l.Color)
 		}
+		written++
 	}
+
+	log.Debugf("LABELS: written=%d skipped=%d", written, skipped)
 }
 
 // featurePoint returns a representative tile-space coordinate for label placement.
-//
-//   - Point       → the point itself
-//   - LineString  → midpoint of the line
-//   - Polygon     → centroid of the outer ring
-//   - Multi*      → same rules applied to the first member
-//
-// Returns ok=false for empty or unrecognised geometry.
 func featurePoint(g orb.Geometry) (x, y float64, ok bool) {
 	switch geom := g.(type) {
 	case orb.Point:
@@ -280,8 +281,6 @@ func drawGeometry(buf *braille.Buffer, g orb.Geometry, req geo.TileRequest, st s
 			}
 		}
 	case orb.Point:
-		// Only draw the dot if this style explicitly wants a line/point marker.
-		// Layers like "poi" that use DrawLabel only must not emit stray pixels.
 		if st.DrawLine {
 			px, py := tileToPixel(geom[0], geom[1], req)
 			buf.SetPixel(px, py, st.LineColor)
@@ -291,16 +290,6 @@ func drawGeometry(buf *braille.Buffer, g orb.Geometry, req geo.TileRequest, st s
 
 // tileToPixel converts a tile-space coordinate (x, y in [0, 4096]) to a braille pixel
 // position on screen, given the tile's pixel offset and scale.
-//
-// The key transform is:
-//
-//	screen_pixel = tile_offset_pixel + tile_coord * scale
-//
-// Where:
-//
-//	tile_offset_pixel = where this tile's (0,0) lands on the braille pixel grid
-//	tile_coord = the coordinate within the tile (0 to 4096)
-//	scale = braille pixels per tile-space unit
 func tileToPixel(tileX, tileY float64, req geo.TileRequest) (px, py int) {
 	px = req.PixelOffsetX + int(tileX*req.Scale)
 	py = req.PixelOffsetY + int(tileY*req.Scale)
@@ -323,7 +312,6 @@ func drawPolygon(buf *braille.Buffer, poly orb.Polygon, req geo.TileRequest, col
 	if len(poly) == 0 {
 		return
 	}
-	// Draw the outer ring filled
 	ring := poly[0]
 	xs := make([]int, len(ring))
 	ys := make([]int, len(ring))
@@ -332,14 +320,12 @@ func drawPolygon(buf *braille.Buffer, poly orb.Polygon, req geo.TileRequest, col
 	}
 	buf.FillPolygon(xs, ys, color)
 
-	// Erase holes with background color (0 = terminal default)
-	// This is the simple approach: draw over the hole with background
 	for _, hole := range poly[1:] {
 		hxs := make([]int, len(hole))
 		hys := make([]int, len(hole))
 		for i, pt := range hole {
 			hxs[i], hys[i] = tileToPixel(pt[0], pt[1], req)
 		}
-		buf.FillPolygon(hxs, hys, 0) // 0 = no color = clears the fill
+		buf.FillPolygon(hxs, hys, 0)
 	}
 }

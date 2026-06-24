@@ -90,9 +90,7 @@ func portOf(addr string) string {
 // connection but shares the TileCache across all sessions.
 func makeHandler(cache *render.TileCache) bm.Handler {
 	return func(s cssh.Session) (tea.Model, []tea.ProgramOption) {
-		return newSSHModel(cache), []tea.ProgramOption{
-			tea.WithAltScreen(),
-		}
+		return newSSHModel(cache), []tea.ProgramOption{}
 	}
 }
 
@@ -174,7 +172,7 @@ func (m sshModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m sshModel) View() string {
+func (m sshModel) View() tea.View {
 	bdr := lipgloss.NewStyle().Foreground(lipgloss.Color("201"))
 	innerW := max(m.width-2, 0)
 	top := bdr.Render("╭" + strings.Repeat("─", innerW) + "╮")
@@ -217,7 +215,9 @@ func (m sshModel) View() string {
 		hudStyled = dim.Render(hudText)
 	}
 	bottom := bdr.Render("╰─ ") + hudStyled + bdr.Render(" "+strings.Repeat("─", padLen)+"╯")
-	return top + "\n" + framed.String() + bottom
+	result := top + "\n" + framed.String() + bottom
+	view := tea.NewView(result)
+	return view
 }
 
 func (m sshModel) hudText() string {

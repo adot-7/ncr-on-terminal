@@ -1,4 +1,3 @@
-// cmd/testtiles/main.go
 package main
 
 import (

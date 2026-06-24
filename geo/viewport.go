@@ -11,12 +11,11 @@ import (
 type TileRequest struct {
 	Z, X, Y int
 
-	// Where does this tile's (0,0) pixel land on the braille pixel grid?
+	// Where does this tile's (0,0) pixel land on the braille pixel grid
 	PixelOffsetX int
 	PixelOffsetY int
 
-	// How many braille pixels does one tile-space unit correspond to?
-	// (This changes with zoom level and screen size)
+	// How many braille pixels does one tile-space unit correspond to
 	Scale float64
 }
 

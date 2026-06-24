@@ -1,0 +1,38 @@
+# Dockerfile.sshserver
+#
+# Build and run the NCR on Terminal SSH demo server.
+#
+# Quick start:
+#   1. ssh-keygen -t ed25519 -f ssh_host_ed25519_key -N ""
+#   2. docker build -f Dockerfile.sshserver -t ncr-sshserver .
+#   3. docker run -d \
+#        -p 2222:2222 \
+#        -v $(pwd)/ssh_host_ed25519_key:/app/ssh_host_ed25519_key:ro \
+#        -v $(pwd)/mapdata:/app/mapdata:ro \
+#        ncr-sshserver
+
+# ── Build stage ────────────────────────────────────────────────────────────────
+FROM golang:1.26-alpine AS build
+WORKDIR /app
+
+# Cache module downloads separately from source
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o ncr-sshserver ./cmd/sshserver/
+
+# ── Runtime stage ──────────────────────────────────────────────────────────────
+FROM alpine:3.20
+RUN apk --no-cache add ca-certificates tzdata
+
+WORKDIR /app
+COPY --from=build /app/ncr-sshserver .
+
+# The following paths are expected to be mounted at runtime (not baked in):
+#   /app/ssh_host_ed25519_key  — SSH host private key (mount as read-only)
+#   /app/mapdata/              — directory containing *.mbtiles tile file
+
+EXPOSE 2222
+ENTRYPOINT ["./ncr-sshserver"]
+CMD ["--addr", ":2222", "--host-key", "ssh_host_ed25519_key", "--tiles", "mapdata/delhi-ncr.mbtiles"]

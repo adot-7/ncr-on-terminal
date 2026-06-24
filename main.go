@@ -33,6 +33,7 @@ type frameReadyMsg string
 type statusMsg string
 
 func initialModel(db *tiles.DB) model {
+	db.ReadMetadata()
 	return model{
 		db:     db,
 		lat:    28.6139, // Delhi center
@@ -278,12 +279,13 @@ func main() {
 		log.Fatal("Usage: mapscii <path-to.mbtiles>")
 	}
 	db, err := tiles.Open(os.Args[1])
+	db.ReadMetadata()
 	if err != nil {
 		log.Fatalf("Failed to open MBTiles: %v", err)
 	}
 	defer db.Close()
 
-	f, err := os.OpenFile("trip.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile("trip.log", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		panic(err)
 	}

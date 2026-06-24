@@ -53,18 +53,20 @@ func Render(req RenderRequest) string {
 	tileRequests := vp.ComputeTiles()
 
 	// Step 2: Define the draw order for layers.
-	// "place" is last so city/town names render on top of everything.
+	// transportation_name is a separate layer in this tile set that carries road
+	// name labels — it must be processed alongside (after) transportation geometry.
+	// "place" is last so city/town names sit on top of everything.
 	layerOrder := []string{
 		"landcover", "landuse", "water", "waterway",
-		"boundary", "transportation", "building", "poi", "place",
+		"boundary", "transportation", "transportation_name",
+		"building", "poi", "place",
 	}
 
 	// Step 3: Load and draw each tile, collecting labels along the way.
 	var labels []Label
-	seenLabels := make(map[string]bool)
-	// dumpedProps: log the raw Properties map once per layer (for DrawLabel layers)
-	// so we can see exactly which key the name is stored under.
-	dumpedProps := make(map[string]bool)
+	// seenRoadLabels deduplicates road name labels — a long road spans many
+	// segments / tiles, each carrying the same name.
+	seenRoadLabels := make(map[string]bool)
 
 	isFirstTile := true
 	for _, req2 := range tileRequests {
@@ -108,19 +110,11 @@ func Render(req RenderRequest) string {
 				drawGeometry(buf, simplified, req2, st)
 
 				if st.DrawLabel {
-					// First time we hit a DrawLabel feature for this layer,
-					// dump its full property map so we can see the actual key names.
-					if !dumpedProps[layerName] {
-						dumpedProps[layerName] = true
-						log.Debugf("PROPS[%s class=%s]: %v", layerName, class, feature.Properties)
-					}
-
-					name, _ := feature.Properties["name"].(string)
-					if name == "" {
-						name, _ = feature.Properties["name_en"].(string)
-					}
+					name := featureName(feature.Properties)
 					if name != "" {
-						if layerName == "transportation" && seenLabels[name] {
+						isRoadLayer := layerName == "transportation" ||
+							layerName == "transportation_name"
+						if isRoadLayer && seenRoadLabels[name] {
 							continue
 						}
 						if tx, ty, ok2 := featurePoint(simplified); ok2 {
@@ -132,8 +126,8 @@ func Render(req RenderRequest) string {
 								RowY:  row,
 								Color: st.LabelColor,
 							})
-							if layerName == "transportation" {
-								seenLabels[name] = true
+							if isRoadLayer {
+								seenRoadLabels[name] = true
 							}
 						}
 					}
@@ -144,47 +138,33 @@ func Render(req RenderRequest) string {
 
 	termW := req.PixelW / 2
 	termH := req.PixelH / 4
-
-	// --- DIAGNOSTIC ---
-	// 1. Log how many labels were collected and where the first few land.
-	log.Debugf("LABELS: collected=%d  termW=%d termH=%d", len(labels), termW, termH)
-	for i, l := range labels {
-		if i >= 8 {
-			break
-		}
-		log.Debugf("  label[%d] %q  col=%d row=%d", i, l.Text, l.ColX, l.RowY)
-	}
-
-	// 2. Hardcoded test: paint a bright magenta "*" at cell (3,3).
-	//    If you can see it on screen, the text-overlay mechanism is working and
-	//    the problem is purely in label data / coordinates.
-	//    Remove this block once labels are confirmed working.
-	testColor := braille.RGBToXterm256(255, 0, 255) // magenta
-	for i, r := range []rune("*LABEL*") {
-		buf.SetText(3+i, 3, r, testColor)
-	}
-	// --- END DIAGNOSTIC ---
-
 	writeLabelsToBuffer(buf, labels, termW, termH)
 	return buf.Render()
 }
 
-// writeLabelsToBuffer writes collected label text directly into the braille buffer's
-// text overlay layer. A per-cell occupancy grid prevents overlapping labels.
+// featureName extracts the best available display name from a feature's
+// property map. This tile set stores names under "name:latin" rather than
+// the standard "name" key, so we try several candidates in order.
+func featureName(props map[string]interface{}) string {
+	for _, key := range []string{"name", "name:latin", "name:en", "name_en", "ref"} {
+		if v, ok := props[key].(string); ok && v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// writeLabelsToBuffer writes collected label text directly into the braille
+// buffer's text overlay layer. A per-cell occupancy grid prevents overlap.
 func writeLabelsToBuffer(buf *braille.Buffer, labels []Label, termW, termH int) {
 	occupied := make(map[[2]int]bool)
-	written, skipped := 0, 0
 
 	for _, l := range labels {
 		if l.ColX < 0 || l.RowY < 0 || l.RowY >= termH {
-			log.Debugf("LABEL skip OOB: %q col=%d row=%d", l.Text, l.ColX, l.RowY)
-			skipped++
 			continue
 		}
 		maxLen := termW - l.ColX
 		if maxLen <= 0 {
-			log.Debugf("LABEL skip maxLen: %q col=%d termW=%d", l.Text, l.ColX, termW)
-			skipped++
 			continue
 		}
 
@@ -201,7 +181,6 @@ func writeLabelsToBuffer(buf *braille.Buffer, labels []Label, termW, termH int) 
 			}
 		}
 		if collision {
-			skipped++
 			continue
 		}
 
@@ -210,13 +189,15 @@ func writeLabelsToBuffer(buf *braille.Buffer, labels []Label, termW, termH int) 
 			occupied[[2]int{col, l.RowY}] = true
 			buf.SetText(col, l.RowY, r, l.Color)
 		}
-		written++
 	}
-
-	log.Debugf("LABELS: written=%d skipped=%d", written, skipped)
 }
 
 // featurePoint returns a representative tile-space coordinate for label placement.
+//
+//   - Point       → the point itself
+//   - LineString  → midpoint of the line
+//   - Polygon     → centroid of the outer ring
+//   - Multi*      → same rules applied to the first member
 func featurePoint(g orb.Geometry) (x, y float64, ok bool) {
 	switch geom := g.(type) {
 	case orb.Point:
@@ -291,6 +272,7 @@ func drawGeometry(buf *braille.Buffer, g orb.Geometry, req geo.TileRequest, st s
 			}
 		}
 	case orb.Point:
+		// Only draw a dot if the style explicitly requests it.
 		if st.DrawLine {
 			px, py := tileToPixel(geom[0], geom[1], req)
 			buf.SetPixel(px, py, st.LineColor)
@@ -298,8 +280,8 @@ func drawGeometry(buf *braille.Buffer, g orb.Geometry, req geo.TileRequest, st s
 	}
 }
 
-// tileToPixel converts a tile-space coordinate (x, y in [0, 4096]) to a braille pixel
-// position on screen, given the tile's pixel offset and scale.
+// tileToPixel converts a tile-space coordinate (x, y in [0, 4096]) to a braille
+// pixel position on screen, given the tile's pixel offset and scale.
 func tileToPixel(tileX, tileY float64, req geo.TileRequest) (px, py int) {
 	px = req.PixelOffsetX + int(tileX*req.Scale)
 	py = req.PixelOffsetY + int(tileY*req.Scale)

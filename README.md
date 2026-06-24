@@ -3,7 +3,7 @@
 > Delhi NCR, rendered in Braille characters — entirely in your terminal.
 
 <!-- Replace this line with the GIF once you've recorded it with demo.tape -->
-<!-- ![NCR on Terminal demo](demo.gif) -->
+![NCR on Terminal demo](demo.gif)
 
 A terminal map viewer for the Delhi National Capital Region built with [BubbleTea](https://github.com/charmbracelet/bubbletea). Roads, water, forests, buildings, metro stations, and place labels — all drawn using Unicode Braille characters for sub-character pixel resolution.
 
@@ -47,34 +47,81 @@ Requires Go 1.21+.
 
 ## Setup: getting an MBTiles file
 
-The app needs an [OpenMapTiles](https://openmaptiles.org)-compatible `.mbtiles` vector tile file. This file is not included in the repo (it's ~50 MB).
+The app needs an [OpenMapTiles](https://openmaptiles.org)-compatible `.mbtiles` vector tile file.
 
-### Recommended: generate with Planetiler
+### Option A — Download the ready-made Delhi NCR file (recommended)
 
-[Planetiler](https://github.com/onthegomap/planetiler) generates an MBTiles file from OpenStreetMap data in minutes.
+The Delhi NCR tile file is distributed directly from the [Releases page](https://github.com/adot-7/ncr-on-terminal/releases/latest) as a release asset:
 
 ```sh
-# 1. Download the India OSM extract (~720 MB)
-wget https://download.geofabrik.de/asia/india-latest.osm.pbf
+# Download (~50 MB)
+wget https://github.com/adot-7/ncr-on-terminal/releases/download/v0.1.0/delhi-ncr.mbtiles
 
-# 2. Download Planetiler (requires Java 17+)
-wget https://github.com/onthegomap/planetiler/releases/latest/download/planetiler.jar
-
-# 3. Generate Delhi NCR tiles (~50 MB output, takes 3–5 min)
-java -jar planetiler.jar \
-  --osm-path=india-latest.osm.pbf \
-  --bounds=76.84,28.30,77.35,29.00 \
-  --output=mapdata/delhi-ncr.mbtiles
+# Put it in mapdata/
+mkdir -p mapdata
+mv delhi-ncr.mbtiles mapdata/
 ```
 
-**Any OMT-compatible `.mbtiles` file works.** The bounding box above covers Delhi NCR. Adjust for any other city.
+> **Data attribution:** Tile data sourced from [BBBike.org extracts](https://extract.bbbike.org/) — free city extracts from OpenStreetMap.
+> Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), licensed [ODbL](https://opendatacommons.org/licenses/odbl/).
+
+### Option B — Generate tiles for any city with tilemaker
+
+If you want tiles for a different city (or want to generate Delhi tiles yourself):
+
+**Step 1 — Get a city OSM extract from BBBike**
+
+Go to [extract.bbbike.org](https://extract.bbbike.org/), draw your area on the map, select **PBF format**, and request the extract. You'll receive a download link by email (usually within a few minutes for city-sized areas).
+
+Alternatively, pre-made city extracts are available at [download.bbbike.org/osm/bbbike/](https://download.bbbike.org/osm/bbbike/):
+
+```sh
+# Example: Delhi
+wget https://download.bbbike.org/osm/bbbike/Delhi/Delhi.osm.pbf
+```
+
+**Step 2 — Install tilemaker**
+
+```sh
+# macOS
+brew install tilemaker
+
+# Linux — download the latest release binary
+wget https://github.com/systemed/tilemaker/releases/latest/download/tilemaker-ubuntu-22.04.zip
+unzip tilemaker-ubuntu-22.04.zip
+```
+
+Or [build from source](https://github.com/systemed/tilemaker#building).
+
+**Step 3 — Clone the OpenMapTiles config files**
+
+```sh
+git clone https://github.com/systemed/tilemaker
+```
+
+The repo includes `resources/config-openmaptiles.json` and `resources/process-openmaptiles.lua` — the config files that produce tiles in the schema this app expects.
+
+**Step 4 — Convert to MBTiles**
+
+```sh
+cd tilemaker
+./tilemaker \
+  --input /path/to/Delhi.osm.pbf \
+  --output ../mapdata/delhi-ncr.mbtiles \
+  --config resources/config-openmaptiles.json \
+  --process resources/process-openmaptiles.lua
+```
+
+Conversion takes 2–5 minutes for a city-sized area. Output is ~40–60 MB.
+
+> **Any OpenMapTiles-compatible `.mbtiles` file works.** Adjust the bounding box and filename for your city.
 
 ### Put the file in mapdata/
 
 ```
 ncr-on-terminal/
 └── mapdata/
-    └── delhi-ncr.mbtiles   ← put it here
+    └── delhi-ncr.mbtiles   ← either downloaded or generated
 ```
 
 ---
@@ -120,7 +167,7 @@ Coloured road names, place labels (towns, suburbs), and building outlines appear
 
 - **AMOLED look:** set your terminal background to `#000000` (pure black). The app's colour palette is designed for dark backgrounds.
 - **Best zoom range:** zoom 10–13 for an overview of Delhi; zoom 14–15 for street-level detail.
-- Labels are in Latin script (`name:latin` property from OSM). Switch to Hindi in the style config if preferred.
+- Labels are in Latin script (`name:latin` from OSM). Switch to Hindi by editing `featureName()` in `render/renderer.go`.
 
 ---
 
@@ -190,7 +237,7 @@ Key packages:
 
 - [ ] **GTFS metro route planning** — a fork of this repo will add the Delhi Metro route network using real GTFS data, letting you plan trips entirely in the terminal
 - [ ] Better label collision avoidance (priority-sorted placement)
-- [ ] Configurable starting location (flags)
+- [ ] Configurable starting location via flags
 - [ ] Other Indian cities (Bengaluru, Mumbai, Chennai bounding boxes)
 
 ---
@@ -198,6 +245,9 @@ Key packages:
 ## License
 
 MIT — do whatever you want with it.
+
+Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright) (ODbL).
+Tile source: [BBBike.org extracts](https://extract.bbbike.org/).
 
 ---
 

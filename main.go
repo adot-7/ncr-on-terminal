@@ -34,7 +34,6 @@ type frameReadyMsg string
 type statusMsg string
 
 func initialModel(db *tiles.DB) model {
-	db.ReadMetadata()
 	return model{
 		db:     db,
 		cache:  render.NewTileCache(db),
@@ -248,7 +247,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to open MBTiles: %v", err)
 	}
-	db.ReadMetadata()
 	defer db.Close()
 
 	f, err := os.OpenFile("trip.log", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)

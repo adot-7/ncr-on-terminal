@@ -217,6 +217,7 @@ func (m sshModel) View() tea.View {
 	bottom := bdr.Render("╰─ ") + hudStyled + bdr.Render(" "+strings.Repeat("─", padLen)+"╯")
 	result := top + "\n" + framed.String() + bottom
 	view := tea.NewView(result)
+	view.AltScreen = true
 	return view
 }
 

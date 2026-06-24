@@ -14,7 +14,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22 # change to 2222 if you moved sshd
+          port: 2222
           script: |
             set -e
             cd ~/ncr-on-terminal

@@ -3,13 +3,15 @@ package style
 import "teaTui/braille"
 
 type LayerStyle struct {
-	DrawFill  bool
-	DrawLine  bool
-	FillColor int // xterm-256 color
-	LineColor int
-	MinZoom   int
-	MaxZoom   int
-	Priority  int // draw order (higher = drawn on top)
+	DrawFill   bool
+	DrawLine   bool
+	FillColor  int // xterm-256 color
+	LineColor  int
+	DrawLabel  bool // draw text labels for features in this layer
+	LabelColor int  // xterm-256 color for label text
+	MinZoom    int
+	MaxZoom    int
+	Priority   int // draw order (higher = drawn on top)
 }
 
 // StyleFor returns the rendering style for a given OpenMapTiles layer name and feature class.
@@ -43,20 +45,24 @@ func StyleFor(layerName, class string, zoom int) (LayerStyle, bool) {
 			MinZoom:   7, MaxZoom: 22, Priority: 5,
 		},
 		// Roads (by class, most important first)
+		// Motorway + trunk get labels starting at zoom 10/11 so you can see NH names
 		"transportation/motorway": {
-			DrawLine:  true,
-			LineColor: braille.RGBToXterm256(230, 80, 60),
-			MinZoom:   5, MaxZoom: 22, Priority: 30,
+			DrawLine: true, DrawLabel: true,
+			LineColor:  braille.RGBToXterm256(230, 80, 60),
+			LabelColor: braille.RGBToXterm256(230, 80, 60),
+			MinZoom:    5, MaxZoom: 22, Priority: 30,
 		},
 		"transportation/trunk": {
-			DrawLine:  true,
-			LineColor: braille.RGBToXterm256(230, 150, 60),
-			MinZoom:   6, MaxZoom: 22, Priority: 29,
+			DrawLine: true, DrawLabel: true,
+			LineColor:  braille.RGBToXterm256(230, 150, 60),
+			LabelColor: braille.RGBToXterm256(230, 150, 60),
+			MinZoom:    6, MaxZoom: 22, Priority: 29,
 		},
 		"transportation/primary": {
-			DrawLine:  true,
-			LineColor: braille.RGBToXterm256(230, 200, 60),
-			MinZoom:   8, MaxZoom: 22, Priority: 28,
+			DrawLine: true, DrawLabel: true,
+			LineColor:  braille.RGBToXterm256(230, 200, 60),
+			LabelColor: braille.RGBToXterm256(230, 200, 60),
+			MinZoom:    8, MaxZoom: 22, Priority: 28,
 		},
 		"transportation/secondary": {
 			DrawLine:  true,
@@ -85,6 +91,18 @@ func StyleFor(layerName, class string, zoom int) (LayerStyle, bool) {
 			FillColor: braille.RGBToXterm256(180, 160, 140),
 			LineColor: braille.RGBToXterm256(150, 130, 110),
 			MinZoom:   13, MaxZoom: 22, Priority: 40,
+		},
+		// Points of interest — labels only, no geometry
+		"poi": {
+			DrawLabel:  true,
+			LabelColor: braille.RGBToXterm256(255, 255, 255),
+			MinZoom:    14, MaxZoom: 22, Priority: 50,
+		},
+		// Place names (cities, towns, villages)
+		"place": {
+			DrawLabel:  true,
+			LabelColor: braille.RGBToXterm256(255, 220, 100),
+			MinZoom:    8, MaxZoom: 22, Priority: 60,
 		},
 	}
 

@@ -100,31 +100,31 @@ func StyleFor(layerName, class string, zoom int) (LayerStyle, bool) {
 		},
 
 		// ── Road name labels (separate layer in this tile set) ─────────────────
-		"transportation_name/motorway": {
-			DrawLabel:  true,
-			LabelColor: braille.RGBToXterm256(210, 75, 45),
-			MinZoom:    7, MaxZoom: 22, Priority: 30,
-		},
-		"transportation_name/trunk": {
-			DrawLabel:  true,
-			LabelColor: braille.RGBToXterm256(190, 125, 40),
-			MinZoom:    8, MaxZoom: 22, Priority: 29,
-		},
-		"transportation_name/primary": {
-			DrawLabel:  true,
-			LabelColor: braille.RGBToXterm256(160, 145, 65),
-			MinZoom:    10, MaxZoom: 22, Priority: 28,
-		},
-		"transportation_name/secondary": {
-			DrawLabel:  true,
-			LabelColor: braille.RGBToXterm256(132, 165, 157),
-			MinZoom:    12, MaxZoom: 22, Priority: 27,
-		},
-		"transportation_name": {
-			DrawLabel:  true,
-			LabelColor: braille.RGBToXterm256(110, 140, 135),
-			MinZoom:    13, MaxZoom: 22, Priority: 25,
-		},
+		// "transportation_name/motorway": {
+		// 	DrawLabel:  true,
+		// 	LabelColor: braille.RGBToXterm256(210, 75, 45),
+		// 	MinZoom:    7, MaxZoom: 22, Priority: 30,
+		// },
+		// "transportation_name/trunk": {
+		// 	DrawLabel:  true,
+		// 	LabelColor: braille.RGBToXterm256(190, 125, 40),
+		// 	MinZoom:    8, MaxZoom: 22, Priority: 29,
+		// },
+		// "transportation_name/primary": {
+		// 	DrawLabel:  true,
+		// 	LabelColor: braille.RGBToXterm256(160, 145, 65),
+		// 	MinZoom:    10, MaxZoom: 22, Priority: 28,
+		// },
+		// "transportation_name/secondary": {
+		// 	DrawLabel:  true,
+		// 	LabelColor: braille.RGBToXterm256(132, 165, 157),
+		// 	MinZoom:    12, MaxZoom: 22, Priority: 27,
+		// },
+		// "transportation_name": {
+		// 	DrawLabel:  true,
+		// 	LabelColor: braille.RGBToXterm256(110, 140, 135),
+		// 	MinZoom:    13, MaxZoom: 22, Priority: 25,
+		// },
 
 		// ── Place names ────────────────────────────────────────────────────────
 		// Light teal-white — high contrast on black, cool tone.
@@ -137,22 +137,22 @@ func StyleFor(layerName, class string, zoom int) (LayerStyle, bool) {
 		// ── POI allowlist ───────────────────────────────────────────────────────
 		//
 		// Transit — metro / subway
-		"poi/railway/subway": {
-			DrawLabel: true, LabelSymbol: "M",
-			LabelColor: braille.RGBToXterm256(0, 200, 230),
-			MinZoom: 12, MaxZoom: 22, Priority: 72,
-		},
+		// "poi/railway/subway": {
+		// 	DrawLabel: true, LabelSymbol: "M",
+		// 	LabelColor: braille.RGBToXterm256(0, 200, 230),
+		// 	MinZoom:    12, MaxZoom: 22, Priority: 72,
+		// },
 		// Transit — mainline train stations (standard OMT class)
 		"poi/railway/station": {
-			DrawLabel: true, LabelSymbol: "T",
+			DrawLabel: true, LabelSymbol: "M",
 			LabelColor: braille.RGBToXterm256(110, 165, 245),
-			MinZoom: 12, MaxZoom: 22, Priority: 71,
+			MinZoom:    12, MaxZoom: 22, Priority: 71,
 		},
 		// Transit — any other railway poi (tram, halt, monorail …)
 		"poi/railway": {
 			DrawLabel: true, LabelSymbol: "T",
 			LabelColor: braille.RGBToXterm256(100, 150, 230),
-			MinZoom: 13, MaxZoom: 22, Priority: 68,
+			MinZoom:    13, MaxZoom: 22, Priority: 68,
 		},
 
 		// Health — hospitals
@@ -161,52 +161,52 @@ func StyleFor(layerName, class string, zoom int) (LayerStyle, bool) {
 		"poi/hospital": {
 			DrawLabel: true, LabelSymbol: "+",
 			LabelColor: braille.RGBToXterm256(235, 70, 70),
-			MinZoom: 12, MaxZoom: 22, Priority: 67,
+			MinZoom:    13, MaxZoom: 22, Priority: 67,
 		},
-		"poi/health/hospital": {
-			DrawLabel: true, LabelSymbol: "+",
-			LabelColor: braille.RGBToXterm256(235, 70, 70),
-			MinZoom: 12, MaxZoom: 22, Priority: 66,
-		},
-		"poi/health": {
-			DrawLabel: true, LabelSymbol: "+",
-			LabelColor: braille.RGBToXterm256(220, 120, 120),
-			MinZoom: 14, MaxZoom: 22, Priority: 62,
-		},
-		// Pharmacy
-		"poi/pharmacy": {
-			DrawLabel: true, LabelSymbol: "+",
-			LabelColor: braille.RGBToXterm256(200, 160, 220),
-			MinZoom: 14, MaxZoom: 22, Priority: 60,
-		},
+		// "poi/health/hospital": {
+		// 	DrawLabel: true, LabelSymbol: "+",
+		// 	LabelColor: braille.RGBToXterm256(235, 70, 70),
+		// 	MinZoom: 12, MaxZoom: 22, Priority: 66,
+		// },
+		// "poi/health": {
+		// 	DrawLabel: true, LabelSymbol: "+",
+		// 	LabelColor: braille.RGBToXterm256(220, 120, 120),
+		// 	MinZoom: 14, MaxZoom: 22, Priority: 62,
+		// },
+		// // Pharmacy
+		// "poi/pharmacy": {
+		// 	DrawLabel: true, LabelSymbol: "+",
+		// 	LabelColor: braille.RGBToXterm256(200, 160, 220),
+		// 	MinZoom: 14, MaxZoom: 22, Priority: 60,
+		// },
 
 		// Food — covers both OMT standard names and alternative naming
 		"poi/restaurant": {
-			DrawLabel: true, LabelSymbol: "f",
+			DrawLabel: true, LabelSymbol: "🍴",
 			LabelColor: braille.RGBToXterm256(225, 165, 45),
-			MinZoom: 15, MaxZoom: 22, Priority: 50,
+			MinZoom:    15, MaxZoom: 22, Priority: 50,
 		},
 		"poi/cafe": {
-			DrawLabel: true, LabelSymbol: "f",
+			DrawLabel: true, LabelSymbol: "🥐",
 			LabelColor: braille.RGBToXterm256(220, 155, 55),
-			MinZoom: 15, MaxZoom: 22, Priority: 50,
+			MinZoom:    15, MaxZoom: 22, Priority: 50,
 		},
 		"poi/fast_food": {
-			DrawLabel: true, LabelSymbol: "f",
+			DrawLabel: true, LabelSymbol: "🍜",
 			LabelColor: braille.RGBToXterm256(215, 145, 45),
-			MinZoom: 15, MaxZoom: 22, Priority: 50,
+			MinZoom:    15, MaxZoom: 22, Priority: 50,
 		},
 		"poi/food": {
-			DrawLabel: true, LabelSymbol: "f",
+			DrawLabel: true, LabelSymbol: "🍲",
 			LabelColor: braille.RGBToXterm256(225, 165, 45),
-			MinZoom: 15, MaxZoom: 22, Priority: 50,
+			MinZoom:    15, MaxZoom: 22, Priority: 50,
 		},
 
 		// Fuel / gas stations
 		"poi/fuel": {
-			DrawLabel: true, LabelSymbol: "g",
+			DrawLabel: true, LabelSymbol: "⛽",
 			LabelColor: braille.RGBToXterm256(65, 210, 75),
-			MinZoom: 14, MaxZoom: 22, Priority: 52,
+			MinZoom:    14, MaxZoom: 22, Priority: 52,
 		},
 	}
 

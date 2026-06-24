@@ -125,11 +125,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the full TUI as a magenta box:
-//
-//	╭────────────────────────────────────────╮
-//	│  braille map canvas  (m.height-2 rows) │
-//	╰─ z:12  N↑  28.6139°N  77.2090°E ──────╯
 func (m model) View() string {
 	bdr := lipgloss.NewStyle().Foreground(lipgloss.Color("201")) // magenta
 
@@ -220,8 +215,8 @@ func (m model) helpContent() string {
 		"    " + key.Render("q") + dim.Render("   quit"),
 		"",
 		dim.Render("  ─────────────────────────────────────────────────"),
-		dim.Render("  Tip: for AMOLED appearance, set your terminal's"),
-		dim.Render("  background color to #000000 (pure black)."),
+		dim.Render("  Tip: set your terminal's background color to #000000"),
+		// dim.Render("  background color to #000000")
 	}
 
 	var sb strings.Builder
@@ -245,15 +240,15 @@ func (m model) hudText() string {
 	zoom := fmt.Sprintf("z:%d", m.zoom)
 	coords := fmt.Sprintf("%.4f°N  %.4f°E", m.lat, m.lon)
 	scale := zoomToScale(m.zoom)
-	loading := ""
-	if m.status == "Rendering..." {
-		loading = "⠿"
-	}
-	parts := []string{zoom, "N↑", coords, scale}
-	if loading != "" {
-		parts = append(parts, loading)
-	}
-	return strings.Join(parts, "  │  ")
+	// loading := ""
+	// if m.status == "Rendering..." {
+	// 	loading = "⠿"
+	// }
+	parts := []string{zoom, "N↑", coords, scale, "Help: ?"}
+	// if loading != "" {
+	// 	parts = append(parts, loading)
+	// }
+	return strings.Join(parts, " │ ")
 }
 
 // renderCmd triggers an async map render.

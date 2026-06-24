@@ -9,6 +9,9 @@ dist/
 # See README.md for how to obtain a Delhi NCR tile file.
 mapdata/*.mbtiles
 mapdata/*.pmtiles
+revert/
+mapdata/*.zip
+mapdata/tilemaker
 
 # SSH host keys — never commit these
 ssh_host_*

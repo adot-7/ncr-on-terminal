@@ -1,18 +1,4 @@
 // cmd/sshserver/main.go
-//
-// SSH demo server — lets anyone try NCR on Terminal without installing anything.
-//
-//   ssh <your-host> -p 2222
-//
-// Setup:
-//   1. Generate a host key: ssh-keygen -t ed25519 -f ssh_host_ed25519_key -N ""
-//   2. Put your mbtiles in mapdata/
-//   3. go run ./cmd/sshserver   (or build + deploy)
-//
-// Dependencies (add with go get):
-//   go get charm.land/wish/v2
-//   go mod tidy
-
 package main
 
 import (
@@ -45,23 +31,24 @@ import (
 
 func main() {
 	addr := flag.String("addr", ":2222", "SSH server listen address")
-	hostKey := flag.String("host-key", "ssh_host_ed25519_key", "Path to SSH host key (ed25519)")
+	hostKey := flag.String("host-key", "ssh_host_ed25519_key", "Path to SSH host key")
 	tilesPath := flag.String("tiles", "mapdata/delhi-ncr.mbtiles", "Path to .mbtiles file")
 	flag.Parse()
 
-	// Shared, read-only tile database. The DB is mutex-protected so it is safe
-	// to use concurrently across all SSH sessions.
 	db, err := tiles.Open(*tilesPath)
 	if err != nil {
 		log.Fatalf("Failed to open MBTiles %q: %v", *tilesPath, err)
 	}
 	defer db.Close()
 
+	// Shared TileCache — one MVT parse per tile, reused across all SSH sessions.
+	cache := render.NewTileCache(db)
+
 	s, err := wish.NewServer(
 		wish.WithAddress(*addr),
 		wish.WithHostKeyPath(*hostKey),
 		wish.WithMiddleware(
-			bm.Middleware(makeHandler(db)),
+			bm.Middleware(makeHandler(cache)),
 			lm.Middleware(),
 		),
 	)
@@ -99,11 +86,11 @@ func portOf(addr string) string {
 	return port
 }
 
-// makeHandler returns a BubbleTea handler function that creates a fresh map
-// session for each incoming SSH connection, sharing the read-only tile DB.
-func makeHandler(db *tiles.DB) bm.Handler {
+// makeHandler returns a BubbleTea handler that creates a fresh sshModel per
+// connection but shares the TileCache across all sessions.
+func makeHandler(cache *render.TileCache) bm.Handler {
 	return func(s cssh.Session) (tea.Model, []tea.ProgramOption) {
-		return newSSHModel(db), []tea.ProgramOption{
+		return newSSHModel(cache), []tea.ProgramOption{
 			tea.WithAltScreen(),
 		}
 	}
@@ -112,7 +99,7 @@ func makeHandler(db *tiles.DB) bm.Handler {
 // ── Model ──────────────────────────────────────────────────────────────────
 
 type sshModel struct {
-	db       *tiles.DB
+	cache    *render.TileCache
 	lat      float64
 	lon      float64
 	zoom     int
@@ -125,9 +112,9 @@ type sshModel struct {
 
 type sshFrameReadyMsg string
 
-func newSSHModel(db *tiles.DB) sshModel {
+func newSSHModel(cache *render.TileCache) sshModel {
 	return sshModel{
-		db:     db,
+		cache:  cache,
 		lat:    28.6139,
 		lon:    77.2090,
 		zoom:   12,
@@ -139,13 +126,11 @@ func (m sshModel) Init() tea.Cmd { return nil }
 
 func (m sshModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		m.status = "Rendering..."
 		return m, m.renderCmd()
-
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
@@ -182,12 +167,10 @@ func (m sshModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.renderCmd()
 			}
 		}
-
 	case sshFrameReadyMsg:
 		m.frame = string(msg)
 		return m, nil
 	}
-
 	return m, nil
 }
 
@@ -226,7 +209,6 @@ func (m sshModel) View() string {
 	if padLen < 0 {
 		padLen = 0
 	}
-
 	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	var hudStyled string
 	if m.status == "Rendering..." {
@@ -234,7 +216,6 @@ func (m sshModel) View() string {
 	} else {
 		hudStyled = dim.Render(hudText)
 	}
-
 	bottom := bdr.Render("╰─ ") + hudStyled + bdr.Render(" "+strings.Repeat("─", padLen)+"╯")
 	return top + "\n" + framed.String() + bottom
 }
@@ -243,15 +224,8 @@ func (m sshModel) hudText() string {
 	zoom := fmt.Sprintf("z:%d", m.zoom)
 	coords := fmt.Sprintf("%.4f°N  %.4f°E", m.lat, m.lon)
 	scale := zoomToScale(m.zoom)
-	loading := ""
-	if m.status == "Rendering..." {
-		loading = "⠿"
-	}
-	parts := []string{zoom, "N↑", coords, scale}
-	if loading != "" {
-		parts = append(parts, loading)
-	}
-	return strings.Join(parts, "  │  ")
+	parts := []string{zoom, "N↑", coords, scale, "? help"}
+	return strings.Join(parts, " │ ")
 }
 
 func (m sshModel) helpContent() string {
@@ -298,14 +272,14 @@ func (m sshModel) helpContent() string {
 }
 
 func (m sshModel) renderCmd() tea.Cmd {
-	db := m.db
+	cache := m.cache
 	lat, lon := m.lat, m.lon
 	zoom := m.zoom
 	pixelW := (m.width - 2) * 2
 	pixelH := (m.height - 2) * 4
 	return func() tea.Msg {
 		frame := render.Render(render.RenderRequest{
-			DB:     db,
+			DB:     cache,
 			Lat:    lat,
 			Lon:    lon,
 			Zoom:   zoom,

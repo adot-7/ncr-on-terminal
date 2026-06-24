@@ -103,9 +103,7 @@ func portOf(addr string) string {
 // session for each incoming SSH connection, sharing the read-only tile DB.
 func makeHandler(db *tiles.DB) bm.Handler {
 	return func(s cssh.Session) (tea.Model, []tea.ProgramOption) {
-		return newSSHModel(db), []tea.ProgramOption{
-			tea.WithAltScreen(),
-		}
+		return newSSHModel(db), []tea.ProgramOption{}
 	}
 }
 
@@ -191,7 +189,7 @@ func (m sshModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m sshModel) View() string {
+func (m sshModel) View() tea.View {
 	bdr := lipgloss.NewStyle().Foreground(lipgloss.Color("201"))
 	innerW := max(m.width-2, 0)
 	top := bdr.Render("╭" + strings.Repeat("─", innerW) + "╮")
@@ -236,7 +234,9 @@ func (m sshModel) View() string {
 	}
 
 	bottom := bdr.Render("╰─ ") + hudStyled + bdr.Render(" "+strings.Repeat("─", padLen)+"╯")
-	return top + "\n" + framed.String() + bottom
+	view := tea.NewView(top + "\n" + framed.String() + bottom)
+	view.AltScreen = true
+	return view
 }
 
 func (m sshModel) hudText() string {

@@ -32,7 +32,6 @@ Type "+"
 Sleep 1.5s
 Type "+"
 Sleep 1.5s
-
 # Pan around at higher zoom
 Right 2
 Sleep 600ms

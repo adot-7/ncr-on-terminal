@@ -1,4 +1,3 @@
-// cmd/sshserver/main.go
 package main
 
 import (

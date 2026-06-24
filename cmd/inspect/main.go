@@ -1,4 +1,3 @@
-// cmd/inspect/main.go
 package main
 
 import (

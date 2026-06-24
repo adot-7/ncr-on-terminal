@@ -62,6 +62,9 @@ func Render(req RenderRequest) string {
 	// Step 3: Load and draw each tile, collecting labels along the way.
 	var labels []Label
 	seenLabels := make(map[string]bool)
+	// dumpedProps: log the raw Properties map once per layer (for DrawLabel layers)
+	// so we can see exactly which key the name is stored under.
+	dumpedProps := make(map[string]bool)
 
 	isFirstTile := true
 	for _, req2 := range tileRequests {
@@ -105,6 +108,13 @@ func Render(req RenderRequest) string {
 				drawGeometry(buf, simplified, req2, st)
 
 				if st.DrawLabel {
+					// First time we hit a DrawLabel feature for this layer,
+					// dump its full property map so we can see the actual key names.
+					if !dumpedProps[layerName] {
+						dumpedProps[layerName] = true
+						log.Debugf("PROPS[%s class=%s]: %v", layerName, class, feature.Properties)
+					}
+
 					name, _ := feature.Properties["name"].(string)
 					if name == "" {
 						name, _ = feature.Properties["name_en"].(string)

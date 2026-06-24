@@ -17,11 +17,18 @@ type RenderRequest struct {
 	DB       *tiles.DB
 	Lat, Lon float64
 	Zoom     int
-	PixelW   int // braille pixel width (= terminal cols * 2)
-	PixelH   int // braille pixel height (= terminal rows * 4)
+	PixelW   int // braille pixel width  (= (termCols-2) * 2)
+	PixelH   int // braille pixel height (= (termRows-2) * 4)
 }
 
-// checks each layer in mvt.Layer to find if a layer with name exists. returns nil otherwise
+// Label holds a text label to be written into the braille buffer's text overlay.
+type Label struct {
+	Text  string
+	ColX  int // terminal column (0-indexed, relative to canvas left edge)
+	RowY  int // terminal row   (0-indexed, relative to canvas top edge)
+	Color int // xterm-256 index; 0 = terminal default
+}
+
 func findLayer(layers mvt.Layers, name string) *mvt.Layer {
 	for _, layer := range layers {
 		if layer != nil && layer.Name == name {
@@ -32,35 +39,36 @@ func findLayer(layers mvt.Layers, name string) *mvt.Layer {
 }
 
 // Render builds a full frame string from the given request.
-// This is called inside a Cmd (goroutine), so it can block.
 func Render(req RenderRequest) string {
 	buf := braille.New(req.PixelW/2, req.PixelH/4)
 	buf.Clear()
 
-	// Step 1: Determine which tiles we need
 	vp := geo.Viewport{
 		Lat: req.Lat, Lon: req.Lon, Zoom: req.Zoom,
 		PixelW: req.PixelW, PixelH: req.PixelH,
 	}
 	tileRequests := vp.ComputeTiles()
 
-	// Step 2: Define the draw order for layers
-	// We iterate layers in this order so that buildings appear on top of roads,
-	// roads appear on top of land cover, etc.
 	layerOrder := []string{
 		"landcover", "landuse", "water", "waterway",
-		"boundary", "transportation", "building", "poi",
+		"boundary", "transportation", "transportation_name",
+		"building", "poi", "place",
 	}
 
-	// Step 3: Load and draw each tile
+	var labels []Label
+	seenRoadLabels := make(map[string]bool)
+
+	// POI diagnostic: log the first 15 POI class+subclass pairs so we can
+	// verify the allowlist names match the tile set.
+	// Remove once POI rendering is confirmed working.
+	poiDumps := 0
+
 	isFirstTile := true
 	for _, req2 := range tileRequests {
-
 		data, err := req.DB.ReadTile(req2.Z, req2.X, req2.Y)
 		if err != nil || data == nil {
-			continue // tile missing or read error — just skip it
+			continue
 		}
-
 		layers, err := mvt.Unmarshal(data)
 		if err != nil {
 			continue
@@ -71,43 +79,174 @@ func Render(req RenderRequest) string {
 					log.Debugf("Layer and features:%s (%d)", l.Name, len(l.Features))
 				}
 			}
+			isFirstTile = false
 		}
 
-		// Step 4: Draw layers in order
 		for _, layerName := range layerOrder {
-			// layer, ok := layers[layerName]
 			layer := findLayer(layers, layerName)
 			if layer == nil {
 				continue
 			}
 
-			// Simplify geometry to reduce points we don't need at this resolution
-			// tolerance: roughly 0.5 screen pixels worth of tile units
-			tolerance := 4096.0 / float64(256) * 0.5 // ≈ 8 tile units per half-pixel
+			tolerance := 4096.0 / float64(256) * 0.5
 			simplifier := simplify.DouglasPeucker(tolerance)
 
 			for _, feature := range layer.Features {
-				// Get class for more specific style lookup
 				class, _ := feature.Properties["class"].(string)
 
-				st, ok := style.StyleFor(layerName, class, req.Zoom)
-				if !ok {
-					continue // don't draw this feature
+				// POI diagnostic — log class/subclass to verify allowlist names
+				if layerName == "poi" && poiDumps < 15 {
+					subclass, _ := feature.Properties["subclass"].(string)
+					log.Debugf("POI: class=%q subclass=%q", class, subclass)
+					poiDumps++
 				}
 
-				// Simplify before transforming
-				simplified := simplifier.Simplify(feature.Geometry)
+				// For POI: try class+subclass combined key first (e.g. "railway/subway")
+				var st style.LayerStyle
+				var ok bool
+				if layerName == "poi" {
+					subclass, _ := feature.Properties["subclass"].(string)
+					if subclass != "" {
+						st, ok = style.StyleFor(layerName, class+"/"+subclass, req.Zoom)
+					}
+					if !ok {
+						st, ok = style.StyleFor(layerName, class, req.Zoom)
+					}
+				} else {
+					st, ok = style.StyleFor(layerName, class, req.Zoom)
+				}
+				if !ok {
+					continue
+				}
 
-				// Draw it
+				simplified := simplifier.Simplify(feature.Geometry)
 				drawGeometry(buf, simplified, req2, st)
+
+				if st.DrawLabel {
+					var text string
+					if st.LabelSymbol != "" {
+						text = st.LabelSymbol
+					} else {
+						text = featureName(feature.Properties)
+					}
+					if text != "" {
+						isRoadLayer := layerName == "transportation" ||
+							layerName == "transportation_name"
+						if isRoadLayer && seenRoadLabels[text] {
+							continue
+						}
+						if tx, ty, ok2 := featurePoint(simplified); ok2 {
+							px, py := tileToPixel(tx, ty, req2)
+							col, row := px/2, py/4
+							labels = append(labels, Label{
+								Text:  text,
+								ColX:  col,
+								RowY:  row,
+								Color: st.LabelColor,
+							})
+							if isRoadLayer {
+								seenRoadLabels[text] = true
+							}
+						}
+					}
+				}
 			}
 		}
 	}
 
+	termW := req.PixelW / 2
+	termH := req.PixelH / 4
+	writeLabelsToBuffer(buf, labels, termW, termH)
 	return buf.Render()
 }
 
-// drawGeometry dispatches to the appropriate draw method based on geometry type.
+// featureName tries several property keys to find a display name.
+// This tile set uses "name:latin" rather than the standard "name".
+func featureName(props map[string]interface{}) string {
+	for _, key := range []string{"name", "name:latin", "name:en", "name_en", "ref"} {
+		if v, ok := props[key].(string); ok && v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func writeLabelsToBuffer(buf *braille.Buffer, labels []Label, termW, termH int) {
+	occupied := make(map[[2]int]bool)
+	for _, l := range labels {
+		if l.ColX < 0 || l.RowY < 0 || l.RowY >= termH {
+			continue
+		}
+		maxLen := termW - l.ColX
+		if maxLen <= 0 {
+			continue
+		}
+		runes := []rune(l.Text)
+		if len(runes) > maxLen {
+			runes = runes[:maxLen]
+		}
+		collision := false
+		for i := range runes {
+			if occupied[[2]int{l.ColX + i, l.RowY}] {
+				collision = true
+				break
+			}
+		}
+		if collision {
+			continue
+		}
+		for i, r := range runes {
+			col := l.ColX + i
+			occupied[[2]int{col, l.RowY}] = true
+			buf.SetText(col, l.RowY, r, l.Color)
+		}
+	}
+}
+
+func featurePoint(g orb.Geometry) (x, y float64, ok bool) {
+	switch geom := g.(type) {
+	case orb.Point:
+		return geom[0], geom[1], true
+	case orb.LineString:
+		if len(geom) == 0 {
+			return
+		}
+		mid := geom[len(geom)/2]
+		return mid[0], mid[1], true
+	case orb.MultiLineString:
+		if len(geom) == 0 || len(geom[0]) == 0 {
+			return
+		}
+		mid := geom[0][len(geom[0])/2]
+		return mid[0], mid[1], true
+	case orb.Polygon:
+		if len(geom) == 0 || len(geom[0]) == 0 {
+			return
+		}
+		ring := geom[0]
+		var sx, sy float64
+		for _, pt := range ring {
+			sx += pt[0]
+			sy += pt[1]
+		}
+		n := float64(len(ring))
+		return sx / n, sy / n, true
+	case orb.MultiPolygon:
+		if len(geom) == 0 || len(geom[0]) == 0 || len(geom[0][0]) == 0 {
+			return
+		}
+		ring := geom[0][0]
+		var sx, sy float64
+		for _, pt := range ring {
+			sx += pt[0]
+			sy += pt[1]
+		}
+		n := float64(len(ring))
+		return sx / n, sy / n, true
+	}
+	return
+}
+
 func drawGeometry(buf *braille.Buffer, g orb.Geometry, req geo.TileRequest, st style.LayerStyle) {
 	switch geom := g.(type) {
 	case orb.LineString:
@@ -137,23 +276,13 @@ func drawGeometry(buf *braille.Buffer, g orb.Geometry, req geo.TileRequest, st s
 			}
 		}
 	case orb.Point:
-		px, py := tileToPixel(geom[0], geom[1], req)
-		buf.SetPixel(px, py, st.LineColor)
+		if st.DrawLine {
+			px, py := tileToPixel(geom[0], geom[1], req)
+			buf.SetPixel(px, py, st.LineColor)
+		}
 	}
 }
 
-// tileToPixel converts a tile-space coordinate (x, y in [0, 4096]) to a braille pixel
-// position on screen, given the tile's pixel offset and scale.
-//
-// The key transform is:
-//
-//	screen_pixel = tile_offset_pixel + tile_coord * scale
-//
-// Where:
-//
-//	tile_offset_pixel = where this tile's (0,0) lands on the braille pixel grid
-//	tile_coord = the coordinate within the tile (0 to 4096)
-//	scale = braille pixels per tile-space unit
 func tileToPixel(tileX, tileY float64, req geo.TileRequest) (px, py int) {
 	px = req.PixelOffsetX + int(tileX*req.Scale)
 	py = req.PixelOffsetY + int(tileY*req.Scale)
@@ -176,7 +305,6 @@ func drawPolygon(buf *braille.Buffer, poly orb.Polygon, req geo.TileRequest, col
 	if len(poly) == 0 {
 		return
 	}
-	// Draw the outer ring filled
 	ring := poly[0]
 	xs := make([]int, len(ring))
 	ys := make([]int, len(ring))
@@ -184,15 +312,12 @@ func drawPolygon(buf *braille.Buffer, poly orb.Polygon, req geo.TileRequest, col
 		xs[i], ys[i] = tileToPixel(pt[0], pt[1], req)
 	}
 	buf.FillPolygon(xs, ys, color)
-
-	// Erase holes with background color (0 = terminal default)
-	// This is the simple approach: draw over the hole with background
 	for _, hole := range poly[1:] {
 		hxs := make([]int, len(hole))
 		hys := make([]int, len(hole))
 		for i, pt := range hole {
 			hxs[i], hys[i] = tileToPixel(pt[0], pt[1], req)
 		}
-		buf.FillPolygon(hxs, hys, 0) // 0 = no color = clears the fill
+		buf.FillPolygon(hxs, hys, 0)
 	}
 }

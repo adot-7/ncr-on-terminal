@@ -26,26 +26,34 @@ var dotBit = [2][4]uint8{
 type Buffer struct {
 	Width, Height int
 	mask          []uint8 // bitmask per cell: len = Width * Height
-	color         []int
-	// xterm-256 color per cell: 0 means no color
+	color         []int   // xterm-256 color per cell: 0 means no color
+
+	// Text overlay: when txtChar[i] != 0, Render emits that rune instead of the
+	// braille character at that cell. Set via SetText; cleared by Clear.
+	txtChar  []rune // text character overlay per cell (0 = no overlay)
+	txtColor []int  // xterm-256 color for the text overlay (0 = terminal default)
 }
 
 // New creates a braille buffer for a terminal of w columns × h rows.
 func New(w, h int) *Buffer {
 	size := w * h
 	return &Buffer{
-		Width:  w,
-		Height: h,
-		mask:   make([]uint8, size),
-		color:  make([]int, size),
+		Width:    w,
+		Height:   h,
+		mask:     make([]uint8, size),
+		color:    make([]int, size),
+		txtChar:  make([]rune, size),
+		txtColor: make([]int, size),
 	}
 }
 
-// Clear resets the buffer to empty (all spaces, no color).
+// Clear resets the buffer to empty (all spaces, no color, no text overlay).
 func (b *Buffer) Clear() {
 	for i := range b.mask {
 		b.mask[i] = 0
 		b.color[i] = 0
+		b.txtChar[i] = 0
+		b.txtColor[i] = 0
 	}
 }
 
@@ -75,6 +83,20 @@ func (b *Buffer) SetPixel(px, py, colorCode int) {
 	if colorCode != 0 {
 		b.color[cellIndex] = colorCode
 	}
+}
+
+// SetText places a single text character at terminal cell (col, row).
+// During Render, text overlay takes priority over whatever braille character
+// occupies the same cell — the geometry is still drawn underneath, but the
+// character emitted is r instead of the braille codepoint.
+// (0,0) is the top-left terminal cell. col is 0..Width-1, row is 0..Height-1.
+func (b *Buffer) SetText(col, row int, r rune, colorCode int) {
+	if col < 0 || col >= b.Width || row < 0 || row >= b.Height {
+		return
+	}
+	idx := row*b.Width + col
+	b.txtChar[idx] = r
+	b.txtColor[idx] = colorCode
 }
 
 // DrawLine rasterizes a line from (x0,y0) to (x1,y1) using Bresenham's algorithm.
@@ -161,6 +183,8 @@ func (b *Buffer) FillPolygon(xs, ys []int, colorCode int) {
 }
 
 // Render converts the buffer to a string of braille Unicode characters with ANSI colors.
+// Cells that have a text overlay (set via SetText) emit their text character instead of
+// the braille codepoint — this is how map labels are drawn inline with the geometry.
 // This string is what you return from the Bubble Tea View() function.
 func (b *Buffer) Render() string {
 	var sb strings.Builder
@@ -168,6 +192,19 @@ func (b *Buffer) Render() string {
 	for row := 0; row < b.Height; row++ {
 		for col := 0; col < b.Width; col++ {
 			cellIndex := row*b.Width + col
+
+			// Text overlay takes priority: emit the label character, not the braille dot.
+			if r := b.txtChar[cellIndex]; r != 0 {
+				tc := b.txtColor[cellIndex]
+				if tc != 0 {
+					sb.WriteString(fmt.Sprintf("\x1b[38;5;%dm%c\x1b[0m", tc, r))
+				} else {
+					sb.WriteRune(r)
+				}
+				continue
+			}
+
+			// Regular braille rendering.
 			mask := b.mask[cellIndex]
 			clr := b.color[cellIndex]
 			ch := rune(0x2800 + uint32(mask)) // braille codepoint

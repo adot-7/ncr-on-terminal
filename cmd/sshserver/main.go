@@ -23,9 +23,9 @@ import (
 
 	"github.com/charmbracelet/log"
 
-	"teaTui/geo"
-	"teaTui/render"
-	"teaTui/tiles"
+	"github.com/adot-7/ncr-on-terminal/geo"
+	"github.com/adot-7/ncr-on-terminal/render"
+	"github.com/adot-7/ncr-on-terminal/tiles"
 )
 
 func main() {

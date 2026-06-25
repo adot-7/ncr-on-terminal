@@ -1,9 +1,9 @@
 package render
 
 import (
-	"teaTui/braille"
-	"teaTui/geo"
-	"teaTui/style"
+	"github.com/adot-7/ncr-on-terminal/braille"
+	"github.com/adot-7/ncr-on-terminal/geo"
+	"github.com/adot-7/ncr-on-terminal/style"
 
 	"github.com/charmbracelet/log"
 	"github.com/paulmach/orb"

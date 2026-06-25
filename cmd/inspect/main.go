@@ -3,7 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
-	"teaTui/tiles"
+
+	"github.com/adot-7/ncr-on-terminal/tiles"
 
 	"github.com/paulmach/orb"
 	"github.com/paulmach/orb/encoding/mvt"

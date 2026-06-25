@@ -82,13 +82,6 @@ If you want tiles for a different city (or want to generate Delhi tiles yourself
 
 Go to [extract.bbbike.org](https://extract.bbbike.org/), draw your area on the map, select **PBF format**, and request the extract. You'll receive a download link by email (usually within a few minutes for city-sized areas).
 
-Alternatively, pre-made city extracts are available at [download.bbbike.org/osm/bbbike/](https://download.bbbike.org/osm/bbbike/):
-
-```sh
-# Example: Delhi
-wget https://download.bbbike.org/osm/bbbike/Delhi/Delhi.osm.pbf
-```
-
 **Step 2 — Install tilemaker**
 
 ```sh

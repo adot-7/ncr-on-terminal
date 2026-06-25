@@ -184,22 +184,22 @@ func StyleFor(layerName, class string, zoom int) (LayerStyle, bool) {
 		"poi/restaurant": {
 			DrawLabel: true, LabelSymbol: "🍴",
 			LabelColor: braille.RGBToXterm256(225, 165, 45),
-			MinZoom:    15, MaxZoom: 22, Priority: 50,
+			MinZoom:    14, MaxZoom: 22, Priority: 50,
 		},
 		"poi/cafe": {
 			DrawLabel: true, LabelSymbol: "🥐",
 			LabelColor: braille.RGBToXterm256(220, 155, 55),
-			MinZoom:    15, MaxZoom: 22, Priority: 50,
+			MinZoom:    14, MaxZoom: 22, Priority: 50,
 		},
 		"poi/fast_food": {
 			DrawLabel: true, LabelSymbol: "🍜",
 			LabelColor: braille.RGBToXterm256(215, 145, 45),
-			MinZoom:    15, MaxZoom: 22, Priority: 50,
+			MinZoom:    14, MaxZoom: 22, Priority: 50,
 		},
 		"poi/food": {
 			DrawLabel: true, LabelSymbol: "🍲",
 			LabelColor: braille.RGBToXterm256(225, 165, 45),
-			MinZoom:    15, MaxZoom: 22, Priority: 50,
+			MinZoom:    14, MaxZoom: 22, Priority: 50,
 		},
 
 		// Fuel / gas stations

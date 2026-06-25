@@ -1,4 +1,4 @@
-module teaTui
+module github.com/adot-7/ncr-on-terminal
 
 go 1.26.2
 
@@ -17,7 +17,6 @@ require (
 	charm.land/log/v2 v2.0.0 // indirect
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
 	github.com/charmbracelet/keygen v0.5.4 // indirect
-	github.com/charmbracelet/ssh v0.0.0-20250826160808-ebfa259c7309 // indirect
 	github.com/charmbracelet/x/conpty v0.1.1 // indirect
 	github.com/charmbracelet/x/errors v0.0.0-20251110184232-6ab307057ac7 // indirect
 	github.com/creack/pty v1.1.24 // indirect
@@ -25,22 +24,17 @@ require (
 )
 
 require (
-	charm.land/wish/v2 v2.0.1
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
-	github.com/charmbracelet/keygen v0.5.4 // indirect
 	github.com/charmbracelet/lipgloss v1.1.0 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20260525132238-948f4557a654 // indirect
 	github.com/charmbracelet/x/ansi v0.11.7 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.15 // indirect
-	github.com/charmbracelet/x/conpty v0.1.1 // indirect
-	github.com/charmbracelet/x/errors v0.0.0-20251110184232-6ab307057ac7 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
 	github.com/charmbracelet/x/termios v0.1.1 // indirect
 	github.com/charmbracelet/x/windows v0.2.2 // indirect
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
-	github.com/creack/pty v1.1.24 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/go-logfmt/logfmt v0.6.1 // indirect

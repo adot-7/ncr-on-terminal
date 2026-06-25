@@ -2,7 +2,8 @@ package main
 
 import (
 	"fmt"
-	"teaTui/braille"
+
+	"github.com/adot-7/ncr-on-terminal/braille"
 )
 
 func main() {

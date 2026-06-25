@@ -1,6 +1,6 @@
 package style
 
-import "teaTui/braille"
+import "github.com/adot-7/ncr-on-terminal/braille"
 
 type LayerStyle struct {
 	DrawFill    bool

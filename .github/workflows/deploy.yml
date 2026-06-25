@@ -18,7 +18,7 @@ jobs:
           script: |
             set -e
             cd ~/ncr-on-terminal
-            git pull origin main
+            git fetch origin main && git reset --hard origin/main
             docker build -f Dockerfile.sshserver -t ncr-sshserver .
             docker stop ncr-map || true
             docker rm ncr-map || true

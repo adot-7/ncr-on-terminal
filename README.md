@@ -3,7 +3,7 @@
 > Delhi NCR, rendered in Braille characters. Entirely in your terminal.
 
 <!-- Replace this line with the GIF once you've recorded it with demo.tape -->
-![NCR on Terminal demo](demo.gif)
+![demo](https://github.com/adot-7/ncr-on-terminal/releases/download/v0.1.0/demo.gif)
 
 A terminal map viewer for the Delhi National Capital Region built with [BubbleTea](https://github.com/charmbracelet/bubbletea). Roads, buildings, metro stations, food joints, water, forests, and place labels - all drawn using Unicode Braille characters for sub-character pixel resolution.
 

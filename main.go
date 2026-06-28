@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strings"
 
@@ -22,7 +23,7 @@ type model struct {
 	cache    *render.TileCache // MVT layer cache — shared with renderCmd goroutines
 	lat      float64
 	lon      float64
-	zoom     int
+	zoom     float64
 	width    int
 	height   int
 	showHelp bool
@@ -85,14 +86,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
 			return m, m.renderCmd()
 		case "+", "=":
-			if m.zoom < 15 {
-				m.zoom++
+			if m.zoom < 16.0 {
+				m.zoom += 0.25
 				m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
 				return m, m.renderCmd()
 			}
 		case "-", "_":
-			if m.zoom > 5 {
-				m.zoom--
+			if m.zoom > 5.0 {
+				m.zoom -= 0.25
 				m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
 				return m, m.renderCmd()
 			}
@@ -101,17 +102,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		switch msg.Button {
 		case tea.MouseButtonWheelUp:
-			if m.zoom < 15 {
-				m.zoom++
+			if m.zoom < 15.9 {
+				m.zoom += 0.1 // finer increments on scroll
 				m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
 				return m, m.renderCmd()
 			}
+			return m, nil
 		case tea.MouseButtonWheelDown:
-			if m.zoom > 5 {
-				m.zoom--
+			if m.zoom > 5.1 {
+				m.zoom -= 0.1
 				m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
 				return m, m.renderCmd()
 			}
+			return m, nil
 		}
 
 	case frameReadyMsg:
@@ -144,7 +147,10 @@ func (m model) View() string {
 	lines := strings.Split(strings.TrimRight(rawContent, "\n"), "\n")
 	var framed strings.Builder
 	for _, line := range lines {
-		framed.WriteString(bdr.Render("│") + line + bdr.Render("│") + "\n")
+		framed.WriteString(bdr.Render("│"))
+		framed.WriteString(line)
+		framed.WriteString(bdr.Render("│"))
+		framed.WriteString("\n")
 	}
 
 	hudText := m.hudText()
@@ -212,15 +218,17 @@ func (m model) helpContent() string {
 		if pad < 0 {
 			pad = 0
 		}
-		sb.WriteString(line + strings.Repeat(" ", pad) + "\n")
+		sb.WriteString(line)
+		sb.WriteString(strings.Repeat(" ", pad))
+		sb.WriteString("\n")
 	}
 	return sb.String()
 }
 
 func (m model) hudText() string {
-	zoom := fmt.Sprintf("z:%d", m.zoom)
+	zoom := fmt.Sprintf("z:%.1f", m.zoom)
 	coords := fmt.Sprintf("%.4f°N  %.4f°E", m.lat, m.lon)
-	scale := zoomToScale(m.zoom)
+	scale := zoomToScale(int(math.Floor(m.zoom)))
 	parts := []string{zoom, "N↑", coords, scale, "? help"}
 	return strings.Join(parts, " │ ")
 }
@@ -231,7 +239,6 @@ func (m model) renderCmd() tea.Cmd {
 	zoom := m.zoom
 	pixelW := (m.width - 2) * 2
 	pixelH := (m.height - 2) * 4
-
 	return func() tea.Msg {
 		frame := render.Render(render.RenderRequest{
 			DB:     cache,

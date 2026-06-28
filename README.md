@@ -64,7 +64,7 @@ The Delhi NCR tile file is distributed directly from the [Releases page](https:/
 
 ```sh
 # Download (~50 MB)
-wget https://github.com/adot-7/ncr-on-terminal/releases/download/v0.1.0/delhi-ncr.mbtiles
+wget https://github.com/adot-7/ncr-on-terminal/releases/download/v0.2.0/delhi-ncr.mbtiles
 
 # Put it in mapdata/
 mkdir -p mapdata

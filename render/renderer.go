@@ -1,6 +1,8 @@
 package render
 
 import (
+	"math"
+
 	"github.com/adot-7/ncr-on-terminal/braille"
 	"github.com/adot-7/ncr-on-terminal/geo"
 	"github.com/adot-7/ncr-on-terminal/style"
@@ -15,7 +17,7 @@ import (
 type RenderRequest struct {
 	DB       *TileCache // uses the MVT-layer cache — not tiles.DB directly
 	Lat, Lon float64
-	Zoom     int
+	Zoom     float64
 	PixelW   int // braille pixel width  (= (termCols-2) * 2)
 	PixelH   int // braille pixel height (= (termRows-2) * 4)
 }
@@ -91,13 +93,13 @@ func Render(req RenderRequest) string {
 				if layerName == "poi" {
 					subclass, _ := feature.Properties["subclass"].(string)
 					if subclass != "" {
-						st, ok = style.StyleFor(layerName, class+"/"+subclass, req.Zoom)
+						st, ok = style.StyleFor(layerName, class+"/"+subclass, int(math.Floor(req.Zoom)))
 					}
 					if !ok {
-						st, ok = style.StyleFor(layerName, class, req.Zoom)
+						st, ok = style.StyleFor(layerName, class, int(math.Floor(req.Zoom)))
 					}
 				} else {
-					st, ok = style.StyleFor(layerName, class, req.Zoom)
+					st, ok = style.StyleFor(layerName, class, int(math.Floor(req.Zoom)))
 				}
 				if !ok {
 					continue

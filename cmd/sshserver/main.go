@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"os/signal"
@@ -107,7 +108,7 @@ type sshModel struct {
 	cache    *render.TileCache
 	lat      float64
 	lon      float64
-	zoom     int
+	zoom     float64
 	width    int
 	height   int
 	showHelp bool
@@ -197,7 +198,10 @@ func (m sshModel) View() tea.View {
 	lines := strings.Split(strings.TrimRight(rawContent, "\n"), "\n")
 	var framed strings.Builder
 	for _, line := range lines {
-		framed.WriteString(bdr.Render("│") + line + bdr.Render("│") + "\n")
+		framed.WriteString(bdr.Render("│"))
+		framed.WriteString(line)
+		framed.WriteString(bdr.Render("│"))
+		framed.WriteString("\n")
 	}
 
 	hudText := m.hudText()
@@ -231,7 +235,7 @@ func (m sshModel) View() tea.View {
 func (m sshModel) hudText() string {
 	zoom := fmt.Sprintf("z:%d", m.zoom)
 	coords := fmt.Sprintf("%.4f°N  %.4f°E", m.lat, m.lon)
-	scale := zoomToScale(m.zoom)
+	scale := zoomToScale(int(math.Floor(m.zoom)))
 	parts := []string{zoom, "N↑", coords, scale, "? help"}
 	return strings.Join(parts, " │ ")
 }
@@ -275,7 +279,9 @@ func (m sshModel) helpContent() string {
 		if pad < 0 {
 			pad = 0
 		}
-		sb.WriteString(line + strings.Repeat(" ", pad) + "\n")
+		sb.WriteString(line)
+		sb.WriteString(strings.Repeat(" ", pad))
+		sb.WriteString("\n")
 	}
 	return sb.String()
 }

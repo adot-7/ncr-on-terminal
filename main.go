@@ -34,12 +34,17 @@ type frameReadyMsg string
 type statusMsg string
 
 func initialModel(db *tiles.DB) model {
-	db.ReadMetadata()
+	var lon, lat float64
+	lon, lat = db.ReadMetadata()
+	if lon == 0 || lat == 0 {
+		lon = 77.2090
+		lat = 28.6139
+	}
 	return model{
 		db:     db,
 		cache:  render.NewTileCache(db),
-		lat:    28.6139,
-		lon:    77.2090,
+		lat:    lat,
+		lon:    lon,
 		zoom:   12,
 		status: "Waiting for terminal size...",
 	}
@@ -164,7 +169,7 @@ func (m model) View() string {
 		hudStyled = mutedStyle.Render(hudText)
 	}
 
-	bottom := bdr.Render("╰─ ") + hudStyled + bdr.Render(" "+strings.Repeat("─", padLen)+"╯")
+	bottom := bdr.Render("╰─ ") + hudStyled + bdr.Render(" "+strings.Repeat("─", padLen)+"─╯")
 	return top + "\n" + framed.String() + bottom
 }
 
@@ -245,7 +250,7 @@ func main() {
 		log.Fatal("Usage: ncr-on-terminal <path-to.mbtiles>")
 	}
 	db, err := tiles.Open(os.Args[1])
-	db.ReadMetadata()
+	// db.ReadMetadata()
 	if err != nil {
 		log.Fatalf("Failed to open MBTiles: %v", err)
 	}
@@ -256,7 +261,7 @@ func main() {
 		panic(err)
 	}
 	log.SetOutput(f)
-	log.SetLevel(log.WarnLevel) // suppress noisy debug logs
+	log.SetLevel(log.DebugLevel) // suppress noisy debug logs
 	log.SetReportCaller(true)
 
 	p := tea.NewProgram(

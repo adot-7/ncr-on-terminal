@@ -145,7 +145,7 @@ func Render(req RenderRequest) string {
 }
 
 func featureName(props map[string]interface{}) string {
-	for _, key := range []string{"name", "name:latin", "name:en", "name_en", "ref"} {
+	for _, key := range []string{"name", "name:hi", "name:latin", "name:en", "name_en", "ref"} {
 		if v, ok := props[key].(string); ok && v != "" {
 			return v
 		}

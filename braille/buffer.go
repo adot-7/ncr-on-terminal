@@ -197,7 +197,8 @@ func (b *Buffer) Render() string {
 			if r := b.txtChar[cellIndex]; r != 0 {
 				tc := b.txtColor[cellIndex]
 				if tc != 0 {
-					sb.WriteString(fmt.Sprintf("\x1b[38;5;%dm%c\x1b[0m", tc, r))
+					//sb.WriteString(fmt.Sprintf("\x1b[38;5;%dm%c\x1b[0m", tc, r))
+					fmt.Fprintf(&sb, "\x1b[38;5;%dm%c\x1b[0m", tc, r)
 				} else {
 					sb.WriteRune(r)
 				}

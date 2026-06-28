@@ -5,6 +5,8 @@ import (
 	"compress/gzip"
 	"database/sql"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/charmbracelet/log"
@@ -109,13 +111,26 @@ func gunzip(data []byte) ([]byte, error) {
 	_, err = buf.ReadFrom(r)
 	return buf.Bytes(), err
 }
-func (d *DB) ReadMetadata() {
+func (d *DB) ReadMetadata() (float64, float64) {
+	log.Debug("READMETA DATA FUNCTION CALLED: ")
+
 	var res string
 	err := d.db.QueryRow("SELECT value from metadata where name=\"center\"").Scan(&res)
 	if err != nil {
 		log.Debug("error metadata: ", err)
 	}
 	log.Debug("metadata: ", res)
+	result := strings.Split(res, ",")
+	lon, err := strconv.ParseFloat(result[0], 64)
+	if err != nil {
+		return 0, 0
+	}
+	lat, err := strconv.ParseFloat(result[1], 64)
+	if err != nil {
+		return 0, 0
+	}
+
+	return lon, lat
 }
 
 // Close releases the database.

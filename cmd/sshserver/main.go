@@ -28,6 +28,9 @@ import (
 	"github.com/adot-7/ncr-on-terminal/tiles"
 )
 
+var initlon, initlat float64
+
+// 77.223500,28.521500
 func main() {
 	addr := flag.String("addr", ":2222", "SSH server listen address")
 	hostKey := flag.String("host-key", "ssh_host_ed25519_key", "Path to SSH host key")
@@ -39,6 +42,11 @@ func main() {
 		log.Fatalf("Failed to open MBTiles %q: %v", *tilesPath, err)
 	}
 	defer db.Close()
+	initlon, initlat = db.ReadMetadata()
+	if initlon == 0 || initlat == 0 {
+		initlon = 77.2090
+		initlat = 28.6139
+	}
 
 	// Shared TileCache — one MVT parse per tile, reused across all SSH sessions.
 	cache := render.NewTileCache(db)
@@ -112,8 +120,8 @@ type sshFrameReadyMsg string
 func newSSHModel(cache *render.TileCache) sshModel {
 	return sshModel{
 		cache:  cache,
-		lat:    28.6139,
-		lon:    77.2090,
+		lat:    initlat,
+		lon:    initlon,
 		zoom:   12,
 		status: "Waiting for terminal size...",
 	}
@@ -213,7 +221,7 @@ func (m sshModel) View() tea.View {
 	} else {
 		hudStyled = dim.Render(hudText)
 	}
-	bottom := bdr.Render("╰─ ") + hudStyled + bdr.Render(" "+strings.Repeat("─", padLen)+"╯")
+	bottom := bdr.Render("╰─ ") + hudStyled + bdr.Render(" "+strings.Repeat("─", padLen)+"─╯")
 	result := top + "\n" + framed.String() + bottom
 	view := tea.NewView(result)
 	view.AltScreen = true
@@ -239,22 +247,23 @@ func (m sshModel) helpContent() string {
 		accent.Render("  NCR on Terminal") + dim.Render("  ─  keybindings"),
 		"",
 		accent.Render("  Navigation"),
-		"    " + key.Render("↑ k w") + dim.Render("  north    ") + key.Render("↓ j s") + dim.Render("  south"),
-		"    " + key.Render("← h a") + dim.Render("  west     ") + key.Render("→ l d") + dim.Render("  east"),
+		"    " + key.Render("↑ k w") + dim.Render("  pan north    ") + key.Render("↓ j s") + dim.Render("  pan south"),
+		"    " + key.Render("← h a") + dim.Render("  pan west     ") + key.Render("→ l d") + dim.Render("  pan east"),
 		"",
 		accent.Render("  Zoom"),
-		"    " + key.Render("+ =") + dim.Render("  zoom in    ") + key.Render("- _") + dim.Render("  zoom out"),
+		"    " + key.Render("+ =") + dim.Render("         zoom in     ") + key.Render("- _") + dim.Render("       zoom out"),
+		"    " + key.Render("scroll ↑") + dim.Render("     zoom in     ") + key.Render("scroll ↓") + dim.Render("   zoom out"),
 		"",
 		accent.Render("  Map symbols"),
-		"    " + key.Render("M") + dim.Render("  metro     ") + key.Render("T") + dim.Render("  rail/train"),
-		"    " + key.Render("+") + dim.Render("  hospital  ") + key.Render("f") + dim.Render("  food"),
-		"    " + key.Render("g") + dim.Render("  fuel"),
+		"    " + key.Render("M") + dim.Render("  metro station    ") + key.Render("T") + dim.Render("  rail/train station"),
+		"    " + key.Render("+") + dim.Render("  hospital         ") + key.Render("🍴, 🍲, 🍜, 🥐") + dim.Render("  food places"),
+		"    " + key.Render("g") + dim.Render("  fuel station"),
 		"",
 		accent.Render("  Other"),
-		"    " + key.Render("?") + dim.Render("  toggle help"),
-		"    " + key.Render("q") + dim.Render("  quit"),
+		"    " + key.Render("?") + dim.Render("   toggle this help screen"),
+		"    " + key.Render("q") + dim.Render("   quit"),
 		"",
-		dim.Render("  github.com/adot-7/ncr-on-terminal"),
+		dim.Render("  Tip: set terminal background to #000000 for AMOLED look"),
 	}
 	var sb strings.Builder
 	for i := 0; i < h; i++ {

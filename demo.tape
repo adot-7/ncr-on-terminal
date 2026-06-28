@@ -19,7 +19,7 @@ Set WindowBar Colorful
 Set BorderRadius 10
 
 Show
-Type "./ncr-on-terminal mapdata/delhi-ncr-big.mbtiles"
+Type "./ncr-on-terminal mapdata/delhi-ncr.mbtiles"
 Enter
 Sleep 2.5s
 

@@ -22,7 +22,7 @@ type TileRequest struct {
 // Viewport holds the current view state.
 type Viewport struct {
 	Lat, Lon float64
-	Zoom     int
+	Zoom     float64
 	// Braille pixel dimensions of the display
 	PixelW, PixelH int
 }
@@ -32,7 +32,7 @@ type Viewport struct {
 func (v Viewport) ComputeTiles() []TileRequest {
 	// Step 1: Find the fractional tile position of the viewport center.
 	center := orb.Point{v.Lon, v.Lat} // orb uses lon,lat order
-	frac := maptile.Fraction(center, maptile.Zoom(v.Zoom))
+
 	// frac.X = e.g., 2928.713 (tile column + fraction within tile)
 	// frac.Y = e.g., 1703.204 (tile row + fraction within tile)
 
@@ -42,8 +42,13 @@ func (v Viewport) ComputeTiles() []TileRequest {
 	// We'll choose it such that at minimum zoom we see a reasonable amount of the world.
 	// For simplicity, start with: one tile covers 256 braille pixels.
 	// You can make this zoom-dependent later.
-	const tilePixels = 256.0     // how many braille pixels wide one tile is
-	scale := tilePixels / 4096.0 // braille pixels per tile-space unit
+	// const tilePixels = 256.0     // how many braille pixels wide one tile is
+	// scale := tilePixels / 4096.0 // braille pixels per tile-space unit
+	// Fractional zoom: tilePixels grows continuously, tiles load at integer boundary
+	intZoom := int(math.Floor(v.Zoom))
+	tilePixels := 256.0 * math.Pow(2.0, v.Zoom-math.Floor(v.Zoom))
+	scale := tilePixels / 4096.0
+	frac := maptile.Fraction(center, maptile.Zoom(intZoom))
 
 	// Step 3: The center of the viewport is at (PixelW/2, PixelH/2) in pixel-space.
 	// The center tile is at fractional position (frac.X, frac.Y).
@@ -72,7 +77,7 @@ func (v Viewport) ComputeTiles() []TileRequest {
 	tilesX := int(math.Ceil(float64(v.PixelW)/tilePixels)) + 1
 	tilesY := int(math.Ceil(float64(v.PixelH)/tilePixels)) + 1
 
-	maxTile := (1 << v.Zoom) // 2^zoom = number of tiles per row/col
+	maxTile := (1 << intZoom) // 2^zoom = number of tiles per row/col
 
 	var requests []TileRequest
 	for dy := -tilesY; dy <= tilesY; dy++ {
@@ -100,7 +105,7 @@ func (v Viewport) ComputeTiles() []TileRequest {
 			}
 
 			requests = append(requests, TileRequest{
-				Z: v.Zoom, X: tileX, Y: tileY,
+				Z: intZoom, X: tileX, Y: tileY,
 				PixelOffsetX: offsetX,
 				PixelOffsetY: offsetY,
 				Scale:        scale,
@@ -112,6 +117,6 @@ func (v Viewport) ComputeTiles() []TileRequest {
 
 // PanAmount returns how much to move lat/lon for one keypress at the given zoom level.
 // Larger zoom = smaller pan (you're more zoomed in).
-func PanAmount(zoom int) float64 {
+func PanAmount(zoom float64) float64 {
 	return 0.05 * math.Pow(0.5, float64(zoom-10))
 }

@@ -1,4 +1,4 @@
-module teaTui
+module github.com/adot-7/ncr-on-terminal
 
 go 1.26.2
 
@@ -17,7 +17,6 @@ require (
 	charm.land/log/v2 v2.0.0 // indirect
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
 	github.com/charmbracelet/keygen v0.5.4 // indirect
-	github.com/charmbracelet/ssh v0.0.0-20250826160808-ebfa259c7309 // indirect
 	github.com/charmbracelet/x/conpty v0.1.1 // indirect
 	github.com/charmbracelet/x/errors v0.0.0-20251110184232-6ab307057ac7 // indirect
 	github.com/creack/pty v1.1.24 // indirect
@@ -25,7 +24,6 @@ require (
 )
 
 require (
-	charm.land/wish/v2 v2.0.1
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/keygen v0.5.4 // indirect

@@ -5,9 +5,9 @@ import (
 	"os"
 	"strings"
 
-	"teaTui/geo"
-	"teaTui/render"
-	"teaTui/tiles"
+	"github.com/adot-7/ncr-on-terminal/geo"
+	"github.com/adot-7/ncr-on-terminal/render"
+	"github.com/adot-7/ncr-on-terminal/tiles"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/log"
@@ -193,7 +193,7 @@ func (m model) helpContent() string {
 		"",
 		accent.Render("  Map symbols"),
 		"    " + key.Render("M") + dim.Render("  metro station    ") + key.Render("T") + dim.Render("  rail/train station"),
-		"    " + key.Render("+") + dim.Render("  hospital         ") + key.Render("f") + dim.Render("  restaurant / café"),
+		"    " + key.Render("+") + dim.Render("  hospital         ") + key.Render("🍴, 🍲, 🍜, 🥐") + dim.Render("  food places"),
 		"    " + key.Render("g") + dim.Render("  fuel station"),
 		"",
 		accent.Render("  Other"),

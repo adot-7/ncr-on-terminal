@@ -4,21 +4,12 @@ import (
 	"fmt"
 	"sync"
 
-	"teaTui/tiles"
+	"github.com/adot-7/ncr-on-terminal/tiles"
 
 	"github.com/paulmach/orb/encoding/mvt"
 )
 
 // TileCache wraps a tiles.DB and adds a second cache layer for parsed MVT
-// layer data. mvt.Unmarshal (protobuf decode) is the most expensive step in
-// the render pipeline; caching the result means it only runs once per unique
-// tile position for the lifetime of the session.
-//
-// The underlying tiles.DB already caches raw gunzipped bytes; this cache sits
-// on top and stores the decoded []Layer structs.
-//
-// Safe for concurrent use — the render goroutine and multiple SSH sessions
-// may all call ReadLayers simultaneously.
 type TileCache struct {
 	db  *tiles.DB
 	mu  sync.RWMutex

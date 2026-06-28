@@ -1,9 +1,9 @@
-// cmd/testtiles/main.go
 package main
 
 import (
 	"fmt"
-	"teaTui/tiles"
+
+	"github.com/adot-7/ncr-on-terminal/tiles"
 
 	"github.com/charmbracelet/log"
 )

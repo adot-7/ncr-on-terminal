@@ -1,11 +1,11 @@
 # NCR on Terminal
 
-> Delhi NCR, rendered in Braille characters — entirely in your terminal.
+> Delhi NCR, rendered in Braille characters. Entirely in your terminal.
 
 <!-- Replace this line with the GIF once you've recorded it with demo.tape -->
-![NCR on Terminal demo](demo.gif)
+![demo](https://github.com/adot-7/ncr-on-terminal/releases/download/v0.1.0/demo.gif)
 
-A terminal map viewer for the Delhi National Capital Region built with [BubbleTea](https://github.com/charmbracelet/bubbletea). Roads, water, forests, buildings, metro stations, and place labels — all drawn using Unicode Braille characters for sub-character pixel resolution.
+A terminal map viewer for the Delhi National Capital Region built with [BubbleTea](https://github.com/charmbracelet/bubbletea). Roads, buildings, metro stations, food joints, water, forests, and place labels - all drawn using Unicode Braille characters for sub-character pixel resolution.
 
 ---
 
@@ -13,9 +13,10 @@ A terminal map viewer for the Delhi National Capital Region built with [BubbleTe
 
 ```sh
 ssh ncr.akashparashar.dev
+#Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
 ```
 
-> **Note:** The SSH demo server may be slow due to many concurrent users not always be running. See [Local install](#install) to run it yourself. 
+> **Note:** The SSH demo server may be slow due to many concurrent users and may not always be running. See [Local install](#install) to run it yourself. 
 
 ---
 
@@ -31,7 +32,15 @@ ssh ncr.akashparashar.dev
 | Linux (ARM64) | `ncr-on-terminal_*_linux_arm64.tar.gz` |
 | Windows | `ncr-on-terminal_*_windows_amd64.zip` |
 
-Extract and run. The binary has no dependencies — no Docker, no runtime, nothing else.
+Extract and [Run](#run). The binary has no dependencies.
+
+**Or install with Go:**
+
+```sh
+go install github.com/adot-7/ncr-on-terminal@latest
+
+```
+Requires Go 1.21+. Binary lands in ~/go/bin/. 
 
 **Or build from source:**
 
@@ -65,20 +74,13 @@ mv delhi-ncr.mbtiles mapdata/
 > **Data attribution:** Tile data sourced from [BBBike.org extracts](https://extract.bbbike.org/) — free city extracts from OpenStreetMap.
 > Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), licensed [ODbL](https://opendatacommons.org/licenses/odbl/).
 
-### Option B — Generate tiles for any city with tilemaker
+### Option B — Generate tiles for any city or region with tilemaker
 
 If you want tiles for a different city (or want to generate Delhi tiles yourself):
 
-**Step 1 — Get a city OSM extract from BBBike**
+**Step 1 — Get a OSM extract from BBBike**
 
 Go to [extract.bbbike.org](https://extract.bbbike.org/), draw your area on the map, select **PBF format**, and request the extract. You'll receive a download link by email (usually within a few minutes for city-sized areas).
-
-Alternatively, pre-made city extracts are available at [download.bbbike.org/osm/bbbike/](https://download.bbbike.org/osm/bbbike/):
-
-```sh
-# Example: Delhi
-wget https://download.bbbike.org/osm/bbbike/Delhi/Delhi.osm.pbf
-```
 
 **Step 2 — Install tilemaker**
 
@@ -233,12 +235,20 @@ Key packages:
 
 ---
 
+## mapscii
+
+[mapscii](https://github.com/rastapasta/mapscii) is great but fetches tiles 
+from a remote server on every pan. It felt slow, network-dependent, and breaks offline.
+
+NCR on Terminal reads from a local `.mbtiles` file (SQLite on disk). 
+Every tile read is a microsecond filesystem lookup. No network, no tile server, 
+works on a plane (idk why you would need to see a map in braille on terminal on plane when you can just look down)
+
 ## Roadmap
 
-- [ ] **GTFS metro route planning** — a fork of this repo will add the Delhi Metro route network using real GTFS data, letting you plan trips entirely in the terminal
+- [ ] **metro route planning** — kinda fun, will be released in the coming week
 - [ ] Better label collision avoidance (priority-sorted placement)
 - [ ] Configurable starting location via flags
-- [ ] Other Indian cities (Bengaluru, Mumbai, Chennai bounding boxes)
 
 ---
 

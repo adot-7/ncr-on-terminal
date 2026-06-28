@@ -1,4 +1,3 @@
-// cmd/sshserver/main.go
 package main
 
 import (
@@ -24,9 +23,9 @@ import (
 
 	"github.com/charmbracelet/log"
 
-	"teaTui/geo"
-	"teaTui/render"
-	"teaTui/tiles"
+	"github.com/adot-7/ncr-on-terminal/geo"
+	"github.com/adot-7/ncr-on-terminal/render"
+	"github.com/adot-7/ncr-on-terminal/tiles"
 )
 
 func main() {
@@ -217,6 +216,7 @@ func (m sshModel) View() tea.View {
 	bottom := bdr.Render("╰─ ") + hudStyled + bdr.Render(" "+strings.Repeat("─", padLen)+"╯")
 	result := top + "\n" + framed.String() + bottom
 	view := tea.NewView(result)
+	view.AltScreen = true
 	return view
 }
 

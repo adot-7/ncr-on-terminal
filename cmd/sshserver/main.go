@@ -132,11 +132,13 @@ func (m sshModel) Init() tea.Cmd { return nil }
 
 func (m sshModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		m.status = "Rendering..."
 		return m, m.renderCmd()
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
@@ -161,17 +163,35 @@ func (m sshModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
 			return m, m.renderCmd()
 		case "+", "=":
-			if m.zoom < 15 {
-				m.zoom++
+			if m.zoom < 15.9 {
+				m.zoom += 0.2
 				m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
 				return m, m.renderCmd()
 			}
 		case "-", "_":
-			if m.zoom > 5 {
-				m.zoom--
+			if m.zoom > 5.1 {
+				m.zoom -= 0.2
 				m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
 				return m, m.renderCmd()
 			}
+		}
+
+	case tea.MouseMsg:
+		switch msg.Mouse().Button {
+		case tea.MouseWheelUp:
+			if m.zoom < 15.9 {
+				m.zoom += 0.1
+				m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
+				return m, m.renderCmd()
+			}
+			return m, nil
+		case tea.MouseWheelDown:
+			if m.zoom > 5.1 {
+				m.zoom -= 0.1
+				m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
+				return m, m.renderCmd()
+			}
+			return m, nil
 		}
 	case sshFrameReadyMsg:
 		m.frame = string(msg)
@@ -233,7 +253,7 @@ func (m sshModel) View() tea.View {
 }
 
 func (m sshModel) hudText() string {
-	zoom := fmt.Sprintf("z:%d", m.zoom)
+	zoom := fmt.Sprintf("z:%.1f", m.zoom)
 	coords := fmt.Sprintf("%.4f°N  %.4f°E", m.lat, m.lon)
 	scale := zoomToScale(int(math.Floor(m.zoom)))
 	parts := []string{zoom, "N↑", coords, scale, "? help"}

@@ -86,28 +86,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
 			return m, m.renderCmd()
 		case "+", "=":
-			if m.zoom < 16.0 {
-				m.zoom += 0.25
+			if m.zoom < 15.9 {
+				m.zoom += 0.2
 				m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
 				return m, m.renderCmd()
 			}
 		case "-", "_":
-			if m.zoom > 5.0 {
-				m.zoom -= 0.25
-				m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
-				return m, m.renderCmd()
-			}
-		// Fine zoom keys — mirrors scroll wheel steps (+/-0.1 per press)
-		// NOTE: added for demo recording; remove after if not wanted as a feature
-		case ",":
-			if m.zoom < 15.9 {
-				m.zoom += 0.1
-				m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
-				return m, m.renderCmd()
-			}
-		case ".":
 			if m.zoom > 5.1 {
-				m.zoom -= 0.1
+				m.zoom -= 0.2
 				m.status = fmt.Sprintf("lat=%.4f lon=%.4f z=%d", m.lat, m.lon, m.zoom)
 				return m, m.renderCmd()
 			}
